@@ -75,9 +75,13 @@ formats.
   cites, theorem numbers that match amsthm's shared per-section counter in
   every format, `\label`/`\ref`/`\eqref` cross-references, and bracketed
   citations that always resolve to the bibliography.
+- Mathgen-style prose: recursive noun phrases ("a pairwise Nozzle,
+  quasi-affine ideal acting on a hyper-Weyl topos"), surname-derived
+  adjectives, question sentences, and appeals to "a well-known result
+  of Wumpin [7]".
 - An alphabetized bibliography mixing journal articles, books, Ph.D.
   theses, and arXiv preprints, all dated no later than the paper.
-- At high detail, an appendix ("Appendix A. A technical lemma") with its
+- At high length, an appendix ("Appendix A. A technical lemma") with its
   own contributor, credited "with an appendix by ..." under the byline.
 
 Generation is controlled by four dials, each 0 to 1 (default 0.5), exposed
@@ -102,6 +106,7 @@ npm test            # determinism, structure, fullness, KaTeX validity
 npm run typecheck
 npm run build       # library and CLI to dist/
 npm run build:site  # browser bundle to site/theorem-ipsum.esm.js
+npm run dev         # rebuild the browser bundle on change
 python3 -m http.server 4173 --directory site
 ```
 

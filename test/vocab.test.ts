@@ -26,6 +26,7 @@ describe("an", () => {
     ["ordered set", "an ordered set"],
     ["universal cover", "a universal cover"],
     ["euclidean domain", "a euclidean domain"],
+    ["Euler relation", "an Euler relation"],
     ["idempotent", "an idempotent"],
   ])("%s → %s", (word, expected) => {
     expect(an(word)).toBe(expected);

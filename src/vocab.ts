@@ -52,7 +52,7 @@ export const FIELDS = [
   "homological algebra", "inner model theory", "knot theory", "lattice theory",
   "low-dimensional topology", "matroid theory", "measure theory", "mereology",
   "model theory", "non-commutative geometry", "number theory", "order theory",
-  "pointless topology", "proof theory", "quandle theory", "ramsey theory",
+  "pointless topology", "proof theory", "quandle theory", "Ramsey theory",
   "representation theory", "singularity theory", "spectral theory",
   "symplectic geometry", "tropical geometry", "universal algebra", "zoncology",
 ] as const;
@@ -137,6 +137,25 @@ const INTRANSITIVE_BASES = new Set([
 ]);
 
 export const IVERBS: Verb[] = VERBS.filter((v) => INTRANSITIVE_BASES.has(v.base));
+
+/** Adverbs that modify adjectives inside noun phrases. */
+export const ADVERB_MODS = [
+  "pairwise", "almost surely", "essentially", "totally", "conditionally",
+  "everywhere", "locally", "globally", "stochastically", "combinatorially",
+  "unconditionally", "compactly", "discretely", "finitely", "universally",
+  "algebraically", "analytically", "partially", "simply", "freely",
+  "continuously", "linearly", "smoothly", "contravariantly",
+] as const;
+
+/** Nouns of mathematical activity: "the derivation of", "questions of uniqueness". */
+export const ACTION_NOUNS = [
+  "derivation", "classification", "construction", "extension", "computation",
+  "characterization", "description", "uniqueness", "existence", "smoothness",
+  "invariance", "convexity", "surjectivity", "injectivity", "solvability",
+  "regularity", "maximality", "measurability", "invertibility", "reducibility",
+  "naturality", "positivity", "countability", "separability", "stability",
+  "minimality", "reversibility", "degeneracy", "finiteness", "admissibility",
+] as const;
 
 export const ADVERBS = [
   "vacuously", "trivially", "logically", "necessarily", "formally",
@@ -228,8 +247,8 @@ export function plural(noun: string): string {
 export function an(phrase: string): string {
   const first = phrase.toLowerCase();
   // Vowel-initial words that open with consonant sounds ("universal",
-  // "useful", "one", "euclidean") take "a".
-  const article = /^(uni|use|one|eu)/.test(first)
+  // "useful", "one", "euclidean") take "a"; "Euler" keeps "an".
+  const article = /^(uni|use|one|euc)/.test(first)
     ? "a"
     : /^[aeiou]/.test(first)
       ? "an"

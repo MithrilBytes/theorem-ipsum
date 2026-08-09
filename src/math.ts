@@ -27,7 +27,7 @@ export interface FnSpec {
 
 export type Deco = "bar" | "hat" | "tilde" | "star" | "prime" | "inv";
 export type Quant = "forall" | "exists" | "nexists" | "existsu";
-export type BigOp = "sum" | "prod" | "int" | "bigcup" | "bigoplus" | "bigotimes";
+export type BigOp = "sum" | "prod" | "int" | "oint" | "bigcup" | "bigoplus" | "bigotimes";
 
 export type Expr =
   | { k: "sym"; s: Sym }
@@ -47,7 +47,7 @@ export type Expr =
   | { k: "tuple"; elems: Expr[] }
   | { k: "quant"; q: Quant; v: Expr; dom?: Expr; body: Expr }
   | { k: "big"; op: BigOp; lo?: Expr; hi?: Expr; body: Expr; dv?: Expr }
-  | { k: "lim"; v: Expr; to: Expr; body: Expr }
+  | { k: "lim"; fn?: "lim" | "sup" | "inf" | "min" | "max"; v: Expr; to: Expr; body: Expr }
   | { k: "cases"; arms: { e: Expr; cond: Expr | null }[] }
   | { k: "mat"; rows: Expr[][] }
   | { k: "typing"; f: Expr; from: Expr; to: Expr };
@@ -340,7 +340,7 @@ export function relation(c: MathCtx): Expr {
       return {
         k: "rel", ops: [EQ],
         parts: [
-          { k: "lim", v, to: { k: "sym", s: INFTY }, body: bodyWith(c, v) },
+          { k: "lim", fn: r.chance(0.3) ? r.pick(["sup", "inf", "min", "max"] as const) : "lim", v, to: { k: "sym", s: INFTY }, body: bodyWith(c, v) },
           reroll(() => term(c, 1), (x) => !toText(x).includes(vText)),
         ],
       };
@@ -353,11 +353,23 @@ function bigOp(c: MathCtx): Expr {
   return bigOpV(c).e;
 }
 
+/** A relation guaranteed to mention v, for hypothesis-conclusion threading. */
+export function relationWith(c: MathCtx, v: Expr): Expr {
+  const r = c.rng;
+  const left = r.chance(0.4) ? v : bodyWith(c, v);
+  const right = reroll(() => term(c, 1), (e) => toText(e) !== toText(v));
+  return {
+    k: "rel",
+    ops: [r.chance(0.4) ? EQ : r.pick(RELS)],
+    parts: [left, right],
+  };
+}
+
 /** A big operator together with its bound variable's text, so callers can
  * keep the bound variable out of expressions beyond its scope. */
 function bigOpV(c: MathCtx): { e: Expr; vText: string } {
   const r = c.rng;
-  const which = r.pick(["sum", "prod", "int", "bigcup", "bigoplus", "bigotimes"] as const);
+  const which = r.pick(["sum", "prod", "int", "int", "oint", "bigcup", "bigoplus", "bigotimes"] as const);
   // Exclude d as the variable of integration so the output never reads "dd".
   const dvPool = c.scalars.filter((s) => s.text !== "d");
   const v: Expr =
@@ -418,6 +430,8 @@ export function displayExpr(c: MathCtx): Expr {
         k: "cases",
         arms: [
           { e: term(c, 1), cond: relChain(c, 1) },
+          ...(r.chance(0.35) ? [{ e: term(c, 1), cond: relChain(c, 1) }] : []),
+          ...(r.chance(0.12) ? [{ e: term(c, 1), cond: relChain(c, 1) }] : []),
           { e: term(c, 1), cond: r.chance(0.5) ? relChain(c, 1) : null },
         ],
       }],
@@ -462,11 +476,12 @@ const QUANT_TEXT: Record<Quant, string> = {
   forall: "∀", exists: "∃", nexists: "∄", existsu: "∃!",
 };
 const BIG_LATEX: Record<BigOp, string> = {
-  sum: "\\sum", prod: "\\prod", int: "\\int", bigcup: "\\bigcup",
-  bigoplus: "\\bigoplus", bigotimes: "\\bigotimes",
+  sum: "\\sum", prod: "\\prod", int: "\\int", oint: "\\oint",
+  bigcup: "\\bigcup", bigoplus: "\\bigoplus", bigotimes: "\\bigotimes",
 };
 const BIG_TEXT: Record<BigOp, string> = {
-  sum: "∑", prod: "∏", int: "∫", bigcup: "⋃", bigoplus: "⨁", bigotimes: "⨂",
+  sum: "∑", prod: "∏", int: "∫", oint: "∮", bigcup: "⋃", bigoplus: "⨁",
+  bigotimes: "⨂",
 };
 
 function parenLatex(e: Expr, parent: OpSpec): string {
@@ -519,7 +534,7 @@ export function toLatex(e: Expr): string {
       const dv = e.dv ? ` \\, d${toLatex(e.dv)}` : "";
       return `${BIG_LATEX[e.op]}${lo}${hi} ${toLatex(e.body)}${dv}`;
     }
-    case "lim": return `\\lim_{${toLatex(e.v)} \\to ${toLatex(e.to)}} ${toLatex(e.body)}`;
+    case "lim": return `\\${e.fn ?? "lim"}_{${toLatex(e.v)} \\to ${toLatex(e.to)}} ${toLatex(e.body)}`;
     case "cases":
       return `\\begin{cases} ${e.arms
         .map((a) => `${toLatex(a.e)} & ${a.cond ? `\\text{if } ${toLatex(a.cond)}` : "\\text{otherwise}"}`)
@@ -626,7 +641,7 @@ export function toText(e: Expr): string {
       const dv = e.dv ? ` d${toText(e.dv)}` : "";
       return `${BIG_TEXT[e.op]}${lo}${hi} ${toText(e.body)}${dv}`;
     }
-    case "lim": return `lim_{${toText(e.v)} → ${toText(e.to)}} ${toText(e.body)}`;
+    case "lim": return `${e.fn ?? "lim"}_{${toText(e.v)} → ${toText(e.to)}} ${toText(e.body)}`;
     case "cases":
       return `{ ${e.arms.map((a) => `${toText(a.e)} ${a.cond ? `if ${toText(a.cond)}` : "otherwise"}`).join("; ")} }`;
     case "mat": return `[ ${e.rows.map((row) => row.map(toText).join("  ")).join(" ; ")} ]`;

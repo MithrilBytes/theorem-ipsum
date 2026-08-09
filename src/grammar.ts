@@ -1,19 +1,19 @@
 /**
- * Sentence-level generation: prose templates, theorem statements, proofs.
- * Everything draws from a shared Ctx so a paper stays coherent: the same
- * symbols recur, named results are referred to consistently, citations point
- * at bibliography entries that exist, and later prose can lean on results and
- * numbered equations already stated.
+ * Sentence-level generation: noun phrases, prose templates, theorem
+ * statements, proofs. Everything draws from a shared Ctx so a paper stays
+ * coherent: the same symbols recur, named results are referred to
+ * consistently, citations point at bibliography entries that exist, and later
+ * prose can lean on results and numbered equations already stated.
  */
 import { lerp, type Rng } from "./rng.js";
 import type { Expr, MathCtx } from "./math.js";
-import { displayExpr, distinctSyms, pureSym, relation, term } from "./math.js";
+import { displayExpr, distinctSyms, pureSym, relation, relationWith, term } from "./math.js";
 import type { Block, ResultKind, Run, Runs } from "./doc.js";
 import { T, citeRun, emph, eqref, joinSentences, m, mergeText, resref, t } from "./doc.js";
 import {
-  ADJECTIVES, ADVERBS, CLOSERS, FIELDS, GLAZE, HEDGES, IVERBS, NAMED_KINDS,
-  NATIONALITIES, OBJECTS, PREFIXES, SURNAMES, SURNAMES_REAL, SURNAMES_SILLY,
-  VERBS, an, cap, plural, titleCase, type Verb,
+  ACTION_NOUNS, ADJECTIVES, ADVERB_MODS, ADVERBS, CLOSERS, FIELDS, GLAZE,
+  HEDGES, IVERBS, NAMED_KINDS, NATIONALITIES, OBJECTS, PREFIXES, SURNAMES,
+  SURNAMES_REAL, SURNAMES_SILLY, VERBS, an, cap, plural, titleCase, type Verb,
 } from "./vocab.js";
 
 export interface ProvedRef {
@@ -63,12 +63,16 @@ function decorate(c: Ctx, word: string): string {
   return word;
 }
 
-const buzz = (c: Ctx) => decorate(c, c.rng.pick(ADJECTIVES));
-const buzz2 = (c: Ctx) => c.rng.sample(ADJECTIVES, 2).map((w) => decorate(c, w));
 const obj = (c: Ctx) => c.rng.pick(OBJECTS);
 const verb = (c: Ctx) => c.rng.pick(VERBS);
 const iverb = (c: Ctx) => c.rng.pick(IVERBS);
 const adverb = (c: Ctx) => c.rng.pick(ADVERBS);
+const act = (c: Ctx) => c.rng.pick(ACTION_NOUNS);
+const hedge = (c: Ctx) => c.rng.pick(HEDGES);
+const named = (c: Ctx) => c.rng.pick(c.named);
+const rel = (c: Ctx) => m(relation(c.math));
+const sym = (c: Ctx) => m(pureSym(c.math));
+const sym2 = (c: Ctx) => distinctSyms(c.math, 2).map(m);
 const surname = (c: Ctx) =>
   c.rng.chance(lerp(0.25, 0.75, c.dials.gobbledygook))
     ? c.rng.pick(SURNAMES_SILLY)
@@ -79,11 +83,6 @@ const surnames2 = (c: Ctx) => {
   for (let i = 0; i < 4 && second === first; i++) second = surname(c);
   return [first, second];
 };
-const hedge = (c: Ctx) => c.rng.pick(HEDGES);
-const named = (c: Ctx) => c.rng.pick(c.named);
-const rel = (c: Ctx) => m(relation(c.math));
-const sym = (c: Ctx) => m(pureSym(c.math));
-const sym2 = (c: Ctx) => distinctSyms(c.math, 2).map(m);
 const provedRef = (c: Ctx) => {
   const p = c.rng.pick(c.proved);
   return resref(p.kind, p.number);
@@ -118,7 +117,142 @@ export function namedResult(rng: Rng): string {
   return rng.weighted(patterns)();
 }
 
-/** A display block; numbered with detail-scaled probability when active. */
+/* ------------------------------------------------------------------ */
+/* Noun phrases                                                        */
+/* ------------------------------------------------------------------ */
+
+/** A surname pressed into service as an adjective: "sub-Kepler", "Cauchy–Riemann". */
+function eponymAdj(c: Ctx): string {
+  const r = c.rng;
+  let name: string = surname(c);
+  if (r.chance(0.22)) name = `${r.pick(PREFIXES)}${name}`;
+  if (r.chance(0.15)) {
+    const other = surname(c);
+    if (other !== name) name = `${name}–${other}`;
+  } else if (r.chance(0.1)) {
+    name = `${name}-type`;
+  }
+  return name;
+}
+
+/** One modifier: an adjective, possibly adverb-led, prefixed, or eponymous. */
+function modifier(c: Ctx): string {
+  const r = c.rng;
+  const g = c.dials.gobbledygook;
+  if (r.chance(lerp(0.2, 0.42, g))) return eponymAdj(c);
+  let adj = decorate(c, r.pick(ADJECTIVES));
+  if (r.chance(lerp(0.12, 0.4, g))) adj = `${r.pick(ADVERB_MODS)} ${adj}`;
+  return adj;
+}
+
+const predAdj = modifier;
+
+/** Attributive modifier list, comma-joined: "meager, Nozzle, pairwise affine". */
+function modifierList(c: Ctx, max = 3): string {
+  const r = c.rng;
+  const g = c.dials.gobbledygook;
+  const n = Math.min(max, r.weighted([
+    [1, 3], [2, lerp(0.8, 2.2, g)], [3, lerp(0.1, 1.1, g)],
+  ] as const));
+  return Array.from({ length: n }, () => modifier(c)).join(", ");
+}
+
+/** Predicate modifier list, "and"-joined: "compact, Weyl and stochastically free". */
+function predList(c: Ctx): string {
+  const r = c.rng;
+  const g = c.dials.gobbledygook;
+  const n = r.weighted([[1, 3], [2, lerp(0.7, 2, g)], [3, lerp(0.15, 1, g)]] as const);
+  const mods = Array.from({ length: n }, () => modifier(c));
+  return n === 1 ? mods[0] : `${mods.slice(0, -1).join(", ")} and ${mods[n - 1]}`;
+}
+
+/** A full noun phrase, no article: "pairwise Nozzle, quasi-affine ideal over ℱ". */
+function np(c: Ctx, opts: { plural?: boolean; pp?: boolean } = {}): Runs {
+  const r = c.rng;
+  const noun = opts.plural ? plural(obj(c)) : obj(c);
+  const head: Runs = [t(`${modifierList(c)} ${noun}`)];
+  if (opts.pp !== false && r.chance(0.22)) {
+    const tail = r.weighted<() => Runs>([
+      [() => T` over ${m(pureSym(c.math))}`, 2],
+      [() => T` of ${m(pureSym(c.math))}`, 1.5],
+      [() => T` acting on ${aNp(c, { pp: false })}`, 1.2],
+      [() => T` equipped with ${aNp(c, { pp: false })}`, 1],
+    ] as [() => Runs, number][])();
+    return mergeText([...head, ...tail]);
+  }
+  return head;
+}
+
+const npPlural = (c: Ctx) => np(c, { plural: true });
+
+/** Noun phrase with its article: "a pairwise Nozzle ideal". */
+function aNp(c: Ctx, opts: { pp?: boolean } = {}): Runs {
+  const phrase = np(c, opts);
+  const first = phrase[0];
+  const article = first?.k === "text" ? an(first.s).split(" ")[0] : "a";
+  return mergeText([t(`${article} `), ...phrase]);
+}
+
+/** Capitalize the first word of a run sequence. */
+function capRuns(runs: Runs): Runs {
+  const first = runs[0];
+  if (first?.k === "text") {
+    return mergeText([{ k: "text", s: cap(first.s) }, ...runs.slice(1)]);
+  }
+  return runs;
+}
+
+/** Plain-text noun phrase, no math and no PP, for titles and keywords. */
+export function npText(c: Ctx, opts: { plural?: boolean } = {}): string {
+  const noun = opts.plural ? plural(obj(c)) : obj(c);
+  return `${modifierList(c, 2)} ${noun}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Assertions and appeals to authority                                 */
+/* ------------------------------------------------------------------ */
+
+const COMPARATORS = [
+  "isomorphic to", "homeomorphic to", "diffeomorphic to", "equivalent to",
+  "comparable to", "dominated by", "controlled by", "bounded by",
+  "distinct from", "invariant under",
+];
+
+/** A claim: usually a formula, sometimes prose in the mathgen mold. */
+function assertion(c: Ctx): Runs {
+  const r = c.rng;
+  if (r.chance(0.6)) return [rel(c)];
+  return r.weighted<() => Runs>([
+    [() => { const [x, y] = sym2(c); return T`${x} is ${r.chance(0.25) ? "not " : ""}${r.pick(COMPARATORS)} ${y}`; }, 3],
+    [() => T`${sym(c)} is ${predList(c)}`, 2.5],
+    [() => T`${surname(c)}'s conjecture is ${c.rng.pick(["true", "false"])} in the context of ${npPlural(c)}`, 0.8],
+    [() => T`${surname(c)}'s ${r.pick(["condition is satisfied", "criterion applies"])}`, 0.8],
+    [() => T`the Riemann hypothesis holds`, 0.5],
+  ] as [() => Runs, number][])();
+}
+
+const CLEAR = [
+  "clear", "simple", "elementary", "straightforward", "obvious", "trivial",
+  "left as an exercise to the reader",
+];
+
+/** An appeal to authority: "a well-known result of Nozzle [3]". */
+function bigTheorem(c: Ctx): Runs {
+  const r = c.rng;
+  return r.weighted<() => Runs>([
+    [() => T`${surname(c)}'s theorem`, 2],
+    [() => T`a ${r.pick(["well-known", "little-known", "recent"])} result of ${surname(c)} ${cite(c)}`, 2],
+    [() => T`the general theory`, 1.5],
+    [() => T`standard techniques of ${r.pick(FIELDS)}`, 1.5],
+    [() => T`well-known properties of ${npPlural(c)}`, 1.2],
+    [() => T`the ${act(c)} of ${npPlural(c)}`, 1.2],
+    [() => T`a standard argument`, 1],
+    [() => T`an approximation argument`, 1],
+    [() => T`an easy exercise`, 0.8],
+  ] as [() => Runs, number][])();
+}
+
+/** A display block; numbered with probability 0.45 when numbering is active. */
 export function display(c: Ctx, e?: Expr): Block {
   const expr = e ?? displayExpr(c.math);
   if (c.eq.label && c.rng.chance(0.45)) {
@@ -136,32 +270,64 @@ export function display(c: Ctx, e?: Expr): Block {
 type SGen = (c: Ctx) => Runs;
 
 const SENTENCES: [SGen, number][] = [
-  [(c) => T`Let ${sym(c)} be ${an(buzz(c))} ${obj(c)}, and write ${m(term(c.math, 1))} for its ${buzz(c)} ${obj(c)}.`, 2],
-  [(c) => T`Fix ${an(buzz(c))} ${obj(c)} in the sense of ${surname(c)} ${cite(c)}.`, 1.5],
-  [(c) => T`Recall from ${cite(c)} that every ${buzz(c)} ${obj(c)} is ${adverb(c)} ${buzz(c)}.`, 2],
-  [(c) => T`${cap(hedge(c))} that ${rel(c)}.`, 2.5],
-  [(c) => T`This stands in stark contrast to the ${buzz(c)} case, where ${rel(c)} fails ${adverb(c)}.`, 1.2],
-  [(c) => T`The ${c.rng.pick(GLAZE)} work of ${surname(c)} on ${named(c)} ${cite(c)} ${adverb(c)} ${verb(c).third} our ${obj(c)}.`, 1.5],
-  [(c) => { const [s1, s2] = surnames2(c); return T`In ${cite(c)}, ${s1} and ${s2} asked whether every ${buzz(c)} ${obj(c)} ${iverb(c).third}; we answer this in the ${buzz(c)} case.`; }, 1.2],
-  [(c) => T`Suppose toward contradiction that ${rel(c)}. Then ${rel(c)}, which is absurd.`, 1],
-  [(c) => T`By ${named(c)}, ${rel(c)} whenever ${rel(c)}.`, 1.5],
-  [(c) => { const [a, b] = sym2(c); return T`Consider the ${buzz(c)} ${obj(c)} ${m(term(c.math, 1))} obtained by ${verb(c).ger} ${a} along ${b}.`; }, 1.5],
+  // Setup and exposition.
+  [(c) => T`Let ${sym(c)} be ${aNp(c)}, and write ${m(term(c.math, 1))} for its ${np(c, { pp: false })}.`, 2],
+  [(c) => T`Fix ${aNp(c)} in the sense of ${surname(c)} ${cite(c)}.`, 1.5],
+  [(c) => T`Recall from ${cite(c)} that every ${np(c)} is ${predList(c)}.`, 2],
+  [(c) => T`${cap(hedge(c))} that ${assertion(c)}.`, 2.5],
+  [(c) => { const [a, b] = sym2(c); return T`Consider the ${np(c, { pp: false })} ${m(term(c.math, 1))} obtained by ${verb(c).ger} ${a} along ${b}.`; }, 1.4],
   [(c) => T`Observe that ${rel(c)}, at least ${adverb(c)}.`, 1.8],
-  [(c) => T`It is well known ${cite(c)} that ${rel(c)}.`, 1.5],
-  [(c) => T`More generally, one may ${verb(c).base} any ${buzz(c)} ${obj(c)} provided ${rel(c)}.`, 1.3],
-  [(c) => { const [a, b] = sym2(c); return T`Throughout, ${a} denotes ${an(buzz(c))} ${obj(c)} and ${b} its canonical ${obj(c)}.`; }, 1],
-  [(c) => T`Surprisingly, the ${obj(c)} ${sym(c)} is ${buzz(c)}, though not ${adverb(c)} so.`, 1.2],
-  [(c) => T`The study of ${buzz(c)} ${plural(obj(c))} goes back to the work of ${surname(c)} on ${buzz(c)} ${plural(obj(c))}.`, 1],
+  [(c) => T`It is well known that ${assertion(c)}.`, 1.5],
+  [(c) => T`It has long been known that ${assertion(c)} ${cite(c)}.`, 1.5],
+  [(c) => T`More generally, one may ${verb(c).base} any ${np(c)} provided ${rel(c)}.`, 1.2],
+  [(c) => { const [a, b] = sym2(c); return T`Throughout, ${a} denotes ${aNp(c)} and ${b} its canonical ${obj(c)}.`; }, 1],
   [(c) => T`In particular, ${rel(c)}.`, 1.4],
-  [(c) => T`Hence ${rel(c)}, and the analogous statement for ${buzz(c)} ${plural(obj(c))} follows ${adverb(c)}.`, 1.2],
-  [(c) => T`On the other hand, ${rel(c)} whenever ${sym(c)} is ${buzz(c)}.`, 1.3],
+  [(c) => T`Hence ${rel(c)}, and the analogous statement for ${npPlural(c)} follows ${adverb(c)}.`, 1.1],
+  [(c) => T`On the other hand, ${rel(c)} whenever ${sym(c)} is ${predAdj(c)}.`, 1.2],
   [(c) => T`By construction, ${rel(c)}.`, 1.2],
-  [(c) => T`It follows from the definition of ${an(buzz(c))} ${obj(c)} that ${rel(c)}.`, 1.2],
-  [(c) => T`A standard argument ${cite(c)} shows that every ${buzz(c)} ${obj(c)} ${iverb(c).third}.`, 1.3],
-  [(c) => T`This was extended to the ${buzz(c)} setting in ${cite(c)}.`, 1.1],
-  [(c) => T`It is not known whether ${rel(c)} in general.`, 1],
-  [(c) => T`We write ${m(term(c.math, 1))} for the ${obj(c)} of ${sym(c)}, following ${cite(c)}.`, 1.1],
-  [(c) => T`No ${buzz(c)} ${obj(c)} can ${verb(c).base} itself; this is ${c.rng.pick(["obvious", "an axiom", "folklore", "immediate from the definitions"])}.`, 0.8],
+  [(c) => T`By ${bigTheorem(c)}, ${assertion(c)}.`, 1.8],
+  [(c) => T`By ${cap(act(c)).toLowerCase()}, ${rel(c)}.`, 0.9],
+  [(c) => T`It follows from the definition of ${aNp(c, { pp: false })} that ${rel(c)}.`, 1.2],
+  [(c) => T`We write ${m(term(c.math, 1))} for the ${obj(c)} of ${sym(c)}, following ${cite(c)}.`, 1],
+  [(c) => T`Surprisingly, the ${obj(c)} ${sym(c)} is ${predList(c)}, though not ${adverb(c)} so.`, 1.1],
+  // Literature and history.
+  [(c) => T`In ${cite(c)}, it is shown that ${assertion(c)}.`, 1.8],
+  [(c) => T`The ${c.rng.pick(GLAZE)} work of ${surname(c)} on ${named(c)} ${cite(c)} ${adverb(c)} ${verb(c).third} our ${obj(c)}.`, 1.3],
+  [(c) => { const [s1, s2] = surnames2(c); return T`In ${cite(c)}, ${s1} and ${s2} asked whether every ${np(c)} ${iverb(c).third}; we answer this in the ${predAdj(c)} case.`; }, 1.1],
+  [(c) => T`Recent developments in ${c.rng.pick(FIELDS)} ${cite(c)} have raised the question of whether ${assertion(c)}.`, 1.8],
+  [(c) => T`It was ${surname(c)} who first asked whether ${npPlural(c)} can be ${verb(c).past}.`, 1.5],
+  [(c) => T`A central problem in ${c.rng.pick(FIELDS)} is the ${act(c)} of ${npPlural(c)}.`, 1.7],
+  [(c) => T`In ${cite(c)}, the main result was the ${act(c)} of ${npPlural(c)}.`, 1.6],
+  [(c) => T`In ${cite(c)}, the authors address the ${act(c)} of ${npPlural(c)} under the additional assumption that ${assertion(c)}.`, 1.4],
+  [(c) => { const [s1, s2] = surnames2(c); return T`${s1} ${cite(c)} improved upon the results of ${s2} by ${verb(c).ger} ${npPlural(c)}.`; }, 1.3],
+  [(c) => T`It would be interesting to apply the techniques of ${cite(c)} to ${npPlural(c)}.`, 1.4],
+  [(c) => T`We wish to extend the results of ${cite(c)} to ${npPlural(c)}.`, 1.4],
+  [(c) => T`${surname(c)}'s ${act(c)} of ${npPlural(c)} was a milestone in ${c.rng.pick(FIELDS)}.`, 1.2],
+  [(c) => T`The groundbreaking work of ${surname(c)} on ${npPlural(c)} was a major advance.`, 1],
+  [(c) => T`A useful survey of the subject can be found in ${cite(c)}.`, 1],
+  [(c) => T`In this context, the results of ${cite(c)} are highly relevant.`, 1.1],
+  [(c) => T`This could shed important light on a conjecture of ${surname(c)}.`, 1.2],
+  [(c) => T`The work in ${cite(c)} did not consider the ${predAdj(c)} case.`, 1.3],
+  [(c) => T`This was extended to the ${predAdj(c)} setting in ${cite(c)}.`, 1],
+  [(c) => T`Recent interest in ${npPlural(c)} has centered on ${verb(c).ger} ${npPlural(c)}.`, 1.2],
+  [(c) => T`Recently, there has been much interest in the ${act(c)} of ${npPlural(c)}.`, 1.5],
+  [(c) => T`A standard argument ${cite(c)} shows that every ${np(c)} ${iverb(c).third}.`, 1.2],
+  // Rhetoric.
+  [(c) => T`Is it possible to ${verb(c).base} ${npPlural(c)}?`, 1.1],
+  [(c) => T`Can one ${verb(c).base} ${npPlural(c)}?`, 0.5],
+  [(c) => T`In this setting, the ability to ${verb(c).base} ${npPlural(c)} is essential.`, 1.2],
+  [(c) => T`Unfortunately, we cannot assume that ${assertion(c)}.`, 1.3],
+  [(c) => T`Every student is aware that ${assertion(c)}.`, 1],
+  [(c) => T`It is not yet known whether ${assertion(c)}, although ${cite(c)} does address the issue of ${act(c)}.`, 1.4],
+  [(c) => T`This leaves open the question of ${act(c)}.`, 1.1],
+  [(c) => T`Very little is known about ${npPlural(c)} beyond the ${predAdj(c)} case.`, 1.1],
+  [(c) => T`It is essential to consider that ${sym(c)} may be ${predList(c)}.`, 1.1],
+  [(c) => T`Here, ${act(c)} is ${c.rng.pick(["clearly", "obviously", "trivially"])} a concern.`, 0.6],
+  [(c) => T`This stands in stark contrast to the ${predAdj(c)} case, where ${rel(c)} fails ${adverb(c)}.`, 1],
+  [(c) => T`Suppose toward contradiction that ${rel(c)}. Then ${rel(c)}, which is absurd.`, 0.8],
+  [(c) => T`By ${named(c)}, ${rel(c)} whenever ${rel(c)}.`, 1.3],
+  [(c) => T`It is not known whether ${assertion(c)} in general.`, 1],
+  [(c) => T`No ${np(c, { pp: false })} can ${verb(c).base} itself; this is ${c.rng.pick(["obvious", "an axiom", "folklore", "immediate from the definitions"])}.`, 0.6],
 ];
 
 const PROVED_SENTENCES: [SGen, number][] = [
@@ -169,6 +335,7 @@ const PROVED_SENTENCES: [SGen, number][] = [
   [(c) => T`By ${provedRef(c)}, we may assume that ${rel(c)}.`, 2],
   [(c) => T`Note that ${provedRef(c)} applies verbatim, since ${rel(c)}.`, 1.5],
   [(c) => T`In view of ${provedRef(c)}, ${rel(c)}.`, 1.5],
+  [(c) => T`It would be interesting to remove the ${predAdj(c)} hypothesis from ${provedRef(c)}.`, 1],
 ];
 
 const EQ_SENTENCES: [SGen, number][] = [
@@ -177,12 +344,16 @@ const EQ_SENTENCES: [SGen, number][] = [
   [(c) => T`Substituting into ${eqRef(c)} gives ${rel(c)}.`, 1.5],
 ];
 
-const CONNECTIVES = ["Moreover,", "Furthermore,", "In fact,", "Indeed,", "Likewise,"];
+const CONNECTIVES = [
+  "Moreover,", "Furthermore,", "In fact,", "Indeed,", "Thus,", "Therefore,",
+  "Next,", "Now,", "On the other hand,", "In contrast,", "Likewise,",
+];
 
-// Sentence starts that already carry their own transition.
+// Sentence starts that already carry their own transition or are questions.
 const NO_PREFIX = [
   "In particular", "Hence", "More generally", "On the other hand", "This ",
-  "Surprisingly", "Throughout", "It is not known",
+  "Surprisingly", "Throughout", "It is not", "Recently", "Unfortunately",
+  "Is it", "Can one", "Here,", "By ", "In this context", "In contrast",
 ];
 
 /** Prefix a sentence with a connective, lowercasing its first word. */
@@ -204,11 +375,11 @@ function extendSentence(c: Ctx, runs: Runs): Runs {
   if (last?.k !== "text" || !last.s.endsWith(".")) return runs;
   const clause = c.rng.weighted<() => Runs>([
     [() => T`, provided ${rel(c)}.`, 2],
-    [() => T`, whenever ${sym(c)} is ${buzz(c)}.`, 2],
+    [() => T`, whenever ${sym(c)} is ${predAdj(c)}.`, 2],
     [() => T`, in the sense of ${surname(c)} ${cite(c)}.`, 1.5],
     [() => T`, though the converse fails ${adverb(c)}.`, 1.2],
     [() => T`, as the reader may verify.`, 1],
-    [() => T`, and similarly for ${buzz(c)} ${plural(obj(c))}.`, 1.3],
+    [() => T`, and similarly for ${npPlural(c)}.`, 1.3],
   ] as [() => Runs, number][])();
   return mergeText([...runs.slice(0, -1), t(last.s.slice(0, -1)), ...clause]);
 }
@@ -223,7 +394,7 @@ export function sentence(c: Ctx): Runs {
   return runs;
 }
 
-/** A paragraph whose length and display probability scale with detail. */
+/** A paragraph whose length and display probability scale with the dials. */
 export function paragraph(c: Ctx, opts: { display?: boolean } = {}): Block[] {
   const p = c.dials.paragraph;
   const n = c.rng.range(Math.round(lerp(2, 5, p)), Math.round(lerp(4, 10, p)));
@@ -243,65 +414,73 @@ export function paragraph(c: Ctx, opts: { display?: boolean } = {}): Block[] {
 /* Theorem statements                                                  */
 /* ------------------------------------------------------------------ */
 
+const SUPPOSE = ["Let us suppose", "Let us assume", "Assume", "Suppose"];
+
 export function statement(c: Ctx, kind: ResultKind): Runs {
   const r = c.rng;
   switch (kind) {
-    case "Definition": {
-      const variants: [() => Runs, number][] = [
-        [() => T`${cap(an(buzz(c)))} ${obj(c)} is said to be ${emph(buzz(c))} if ${rel(c)}.`, 2],
-        [() => T`The ${emph(`${buzz(c)} ${obj(c)}`)} of ${sym(c)} is the ${obj(c)} ${m(term(c.math, 1))}, provided this exists.`, 1.5],
-        [() => T`We call ${sym(c)} ${emph(buzz(c))} whenever ${rel(c)}, and ${emph(`totally ${buzz(c)}`)} otherwise.`, 1],
-      ];
-      return r.weighted(variants)();
-    }
+    case "Definition":
+      return r.weighted<() => Runs>([
+        [() => T`${capRuns(aNp(c))} is said to be ${emph(predAdj(c))} if ${rel(c)}.`, 2],
+        [() => T`${capRuns(aNp(c, { pp: false }))} is a ${emph(obj(c))} if it is ${predList(c)}.`, 1.5],
+        [() => T`The ${emph(npText(c))} of ${sym(c)} is the ${obj(c)} ${m(term(c.math, 1))}, provided this exists.`, 1.5],
+        [() => T`We say ${aNp(c, { pp: false })} ${sym(c)} is ${emph(predAdj(c))} if ${rel(c)}.`, 1.5],
+        [() => T`We call ${sym(c)} ${emph(predAdj(c))} whenever ${rel(c)}, and ${emph(`totally ${predAdj(c)}`)} otherwise.`, 1],
+      ])();
     case "Conjecture":
       return r.weighted<() => Runs>([
-        [() => T`Every ${buzz(c)} ${obj(c)} ${iverb(c).third} after finitely many steps.`, 1.5],
-        [() => T`${cap(named(c))} holds for all ${buzz(c)} ${plural(obj(c))}.`, 1],
-        [() => T`There are infinitely many ${buzz(c)} ${plural(obj(c))} ${sym(c)} with ${rel(c)}.`, 1.2],
+        [() => T`Every ${np(c)} ${iverb(c).third} after finitely many steps.`, 1.5],
+        [() => T`${cap(named(c))} holds for all ${npPlural(c)}.`, 1],
+        [() => { const e = pureSym(c.math); return T`There are infinitely many ${npPlural(c)} ${m(e)} with ${m(relationWith(c.math, e))}.`; }, 1.2],
       ])();
     case "Axiom":
     case "Postulate":
       return r.weighted<() => Runs>([
-        [() => T`There is no ${buzz(c)} ${obj(c)}.`, 1],
+        [() => T`There is no ${np(c)}.`, 1],
         [() => T`${rel(c)}, always and without exception.`, 1.2],
-        [() => T`Every ${obj(c)} is contained in ${an(buzz(c))} ${obj(c)}, which is itself ${buzz(c)}.`, 1],
+        [() => T`Every ${obj(c)} is contained in ${aNp(c)}, which is itself ${predAdj(c)}.`, 1],
       ])();
     case "Corollary":
       return r.weighted<() => Runs>([
         [() => T`${rel(c)}.`, 1.5],
         [() => T`${cap(named(c))} holds ${adverb(c)}.`, 1],
-        [() => { const [p, q] = buzz2(c); return T`No ${obj(c)} is both ${p} and ${q}.`; }, 1],
+        [() => { const [p, q] = c.rng.sample(ADJECTIVES, 2); return T`No ${obj(c)} is both ${decorate(c, p)} and ${decorate(c, q)}.`; }, 1],
       ])();
     case "Remark": {
       const variants: [() => Runs, number][] = [
         [() => c.proved.length > 0
           ? T`The converse of ${provedRef(c)} is false in general; see ${cite(c)}.`
           : T`The converse is false in general; see ${cite(c)}.`, 1.5],
-        [() => T`The hypothesis that ${sym(c)} be ${buzz(c)} cannot be dropped, as the ${obj(c)} ${m(term(c.math, 1))} shows.`, 1.5],
-        [() => T`It is not known whether ${rel(c)} in the ${buzz(c)} case.`, 1.2],
-        [() => T`A similar argument applies to ${buzz(c)} ${plural(obj(c))}, with ${sym(c)} replaced by ${m(term(c.math, 1))}.`, 1.2],
+        [() => T`The hypothesis that ${sym(c)} be ${predAdj(c)} cannot be dropped, as the ${obj(c)} ${m(term(c.math, 1))} shows.`, 1.5],
+        [() => T`It is not known whether ${assertion(c)} in the ${predAdj(c)} case.`, 1.2],
+        [() => T`A similar argument applies to ${npPlural(c)}, with ${sym(c)} replaced by ${m(term(c.math, 1))}.`, 1.2],
       ];
       return r.weighted(variants)();
     }
     case "Example": {
       const x = sym(c);
       const variants: [() => Runs, number][] = [
-        [() => { const [p, q] = buzz2(c); return T`Let ${x} = ${m(term(c.math, 2))}. Then ${x} is ${p} but not ${q}.`; }, 2],
-        [() => T`Take ${x} to be the ${buzz(c)} ${obj(c)} of ${m(term(c.math, 1))}. Then ${rel(c)}, so ${x} fails to be ${buzz(c)}.`, 1.5],
-        [() => T`The ${obj(c)} ${m(term(c.math, 1))} is ${buzz(c)}; however, it does not satisfy ${named(c)}.`, 1.2],
+        [() => { const [p, q] = c.rng.sample(ADJECTIVES, 2); return T`Let ${x} = ${m(term(c.math, 2))}. Then ${x} is ${decorate(c, p)} but not ${decorate(c, q)}.`; }, 2],
+        [() => T`Take ${x} to be the ${np(c, { pp: false })} of ${m(term(c.math, 1))}. Then ${rel(c)}, so ${x} fails to be ${predAdj(c)}.`, 1.5],
+        [() => T`The ${obj(c)} ${m(term(c.math, 1))} is ${predList(c)}; however, it does not satisfy ${named(c)}.`, 1.2],
       ];
       return r.weighted(variants)();
     }
     default: {
       // Theorem, Lemma, Proposition
       const variants: [() => Runs, number][] = [
-        [() => T`Let ${sym(c)} be ${an(buzz(c))} ${obj(c)}. Then ${rel(c)}.`, 2.5],
-        [() => { const [p, q] = buzz2(c); return T`Every ${p} ${obj(c)} is ${q}, and moreover ${rel(c)}.`; }, 2],
-        [() => { const [x, y] = sym2(c); return T`For every ${buzz(c)} ${obj(c)} ${x} there exists a unique ${buzz(c)} ${obj(c)} ${y} such that ${rel(c)}.`; }, 2],
+        [() => { const e = pureSym(c.math); return T`Let ${m(e)} be ${aNp(c)}. Then ${m(relationWith(c.math, e))}.`; }, 2.5],
+        [() => T`Every ${np(c)} is ${predList(c)}, and moreover ${rel(c)}.`, 2],
+        [() => { const [x, y] = distinctSyms(c.math, 2); return T`For every ${np(c, { pp: false })} ${m(x)} there exists a unique ${np(c, { pp: false })} ${m(y)} such that ${m(relationWith(c.math, y))}.`; }, 2],
         [() => T`If ${rel(c)}, then ${rel(c)}.`, 2],
-        [() => { const x = sym(c); return T`Suppose ${x} ${verb(c).third} ${an(buzz(c))} ${obj(c)}. Then ${x} is ${buzz(c)} if and only if ${rel(c)}.`; }, 1.5],
-        [() => { const x = sym(c); return T`Assume ${rel(c)}. Then ${rel(c)}, and equality holds if and only if ${x} is ${buzz(c)}.`; }, 1.5],
+        [() => T`There exists ${aNp(c, { pp: false })} that is ${predList(c)}.`, 1.2],
+        [() => { const e = pureSym(c.math); const x = m(e); return T`Suppose ${x} ${iverb(c).third}. Then ${x} is ${predAdj(c)} if and only if ${m(relationWith(c.math, e))}.`; }, 1.5],
+        [() => { const e = pureSym(c.math); return T`Assume ${rel(c)}. Then ${m(relationWith(c.math, e))}, and equality holds if and only if ${m(e)} is ${predAdj(c)}.`; }, 1.5],
+        [() => {
+          const [x, y] = distinctSyms(c.math, 2);
+          const target = c.rng.chance(0.5) ? x : y;
+          return T`${r.pick(SUPPOSE)} ${assertion(c)}. Let ${m(x)} be ${aNp(c)}. Further, let ${m(y)} be ${aNp(c)}. Then ${m(relationWith(c.math, target))}.`;
+        }, 2],
       ];
       return r.weighted(variants)();
     }
@@ -311,9 +490,10 @@ export function statement(c: Ctx, kind: ResultKind): Runs {
 /** The main theorem's statement, echoing the title. */
 export function mainStatement(c: Ctx): Runs {
   const { buzz: b, obj: o } = c.theme;
-  const x = sym(c);
+  const e = pureSym(c.math);
+  const x = m(e);
   const variants: [() => Runs, number][] = [
-    [() => T`Let ${x} be ${an(b)} ${o}. Then ${named(c)} holds for ${x}; in particular, ${rel(c)}.`, 2],
+    [() => T`Let ${x} be ${an(b)} ${o}. Then ${named(c)} holds for ${x}; in particular, ${m(relationWith(c.math, e))}.`, 2],
     [() => T`Every ${b} ${o} ${iverb(c).third}. Moreover, ${rel(c)}.`, 2],
     [() => T`${cap(c.named[0])} holds for every ${b} ${o}.`, 1.5],
   ];
@@ -325,20 +505,32 @@ export function mainStatement(c: Ctx): Runs {
 /* ------------------------------------------------------------------ */
 
 const PROOF_OPENERS: [SGen, number][] = [
-  [(c) => T`Without loss of generality, ${rel(c)}, since ${sym(c)} may be ${verb(c).past} ${adverb(c)}.`, 2],
-  [(c) => T`We proceed by induction on ${sym(c)}, the base case being ${adverb(c)} vacuous.`, 2],
-  [(c) => T`Suppose toward contradiction that ${rel(c)}.`, 1.5],
-  [(c) => T`Fix ${an(buzz(c))} ${obj(c)} ${sym(c)} and let ${m(term(c.math, 1))} denote its ${buzz(c)} ${obj(c)}.`, 2],
-  [(c) => T`By Zorn's lemma, ${rel(c)}.`, 1.2],
+  [(c) => T`We begin by observing that ${assertion(c)}.`, 2],
+  [(c) => T`Without loss of generality, ${rel(c)}, since ${sym(c)} may be ${verb(c).past} ${adverb(c)}.`, 1.6],
+  [(c) => T`Suppose the contrary.`, 1.2],
+  [(c) => T`The essential idea is that ${assertion(c)}.`, 1.6],
+  [(c) => T`We follow ${cite(c)}.`, 1.2],
+  [(c) => T`We show the contrapositive.`, 1],
+  [(c) => T`One direction is ${c.rng.pick(CLEAR)}, so we consider the converse.`, 1.4],
+  [(c) => T`This proof can be omitted on a first reading.`, 0.6],
+  [(c) => T`Fix ${aNp(c)} ${sym(c)} and let ${m(term(c.math, 1))} denote its ${np(c, { pp: false })}.`, 1.8],
+  [(c) => T`By Zorn's lemma, ${rel(c)}.`, 1],
   [(c) => T`Passing to a subsequence if necessary, we may assume ${rel(c)}.`, 1.2],
-  [(c) => T`We first treat the case in which ${sym(c)} is ${buzz(c)}.`, 1.3],
+  [(c) => T`We first treat the case in which ${sym(c)} is ${predAdj(c)}.`, 1.3],
 ];
 
 function closer(c: Ctx): Runs {
   const r = c.rng;
-  if (r.chance(0.18)) return T`See ${cite(c)} for a related argument.`;
-  if (r.chance(0.22)) return T`The remaining details are a routine exercise in ${r.pick(FIELDS)}.`;
-  return [t(r.pick(CLOSERS))];
+  return r.weighted<() => Runs>([
+    [() => T`The result now follows by ${bigTheorem(c)}.`, 2],
+    [() => T`The remaining details are ${r.pick(CLEAR)}.`, 1.6],
+    [() => T`This is the desired statement.`, 1.2],
+    [() => T`The interested reader can fill in the details.`, 1],
+    [() => T`This contradicts the fact that ${assertion(c)}.`, 1],
+    [() => T`See ${cite(c)} for a related argument.`, 0.9],
+    [() => T`The remaining details are a routine exercise in ${r.pick(FIELDS)}.`, 0.8],
+    [() => [t(r.pick(CLOSERS))], 2.5],
+  ] as [() => Runs, number][])();
 }
 
 export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
@@ -346,6 +538,11 @@ export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   const d = c.dials.length;
   const pd = c.dials.paragraph;
   const deep = opts.deep ?? r.chance(lerp(0.1, 0.6, d));
+
+  if (!opts.deep && r.chance(0.07)) {
+    return [{ k: "para", runs: r.chance(0.5) ? T`This is ${r.pick(CLEAR)}.` : T`See ${cite(c)}.` }];
+  }
+
   const blocks: Block[] = [];
   const opener = r.weighted(PROOF_OPENERS)(c);
   const mid = () => {
@@ -363,7 +560,10 @@ export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   if (shape === "induction") {
     blocks.push({
       k: "para",
-      runs: joinSentences([T`We proceed by induction on ${sym(c)}.`, T`For the base case, ${rel(c)}, so that`]),
+      runs: joinSentences([
+        r.chance(0.25) ? T`We proceed by transfinite induction.` : T`We proceed by induction on ${sym(c)}.`,
+        T`For the base case, ${rel(c)}, so that`,
+      ]),
     });
     blocks.push(display(c));
     blocks.push({
@@ -427,7 +627,7 @@ export function introOpener(c: Ctx): Runs {
   const { verb: v, buzz: b, obj: o } = c.theme;
   const sentences = [
     T`In ${c.field}, ${c.named[0]} for ${b} ${plural(o)} has long been considered ${v.able}${c.rng.chance(0.5) ? ", if not " + adverb(c) + " so" : ""}.`,
-    T`The purpose of the present paper is to ${v.base} it ${adverb(c)}.`,
+    T`The goal of the present ${c.rng.pick(["paper", "article"])} is to ${v.base} it ${adverb(c)}.`,
     sentence(c),
   ];
   if (c.rng.chance(c.dials.paragraph)) sentences.push(weave(c, sentence(c)));
@@ -437,8 +637,8 @@ export function introOpener(c: Ctx): Runs {
 /** A literature-review paragraph for the introduction. */
 export function literature(c: Ctx): Runs {
   const sentences = [
-    T`The systematic study of ${buzz(c)} ${plural(obj(c))} began with the ${c.rng.pick(GLAZE)} memoir of ${surname(c)} ${cite(c)}.`,
-    T`Further progress was made in ${cite(c)}, where ${named(c)} was established for ${buzz(c)} ${plural(obj(c))}.`,
+    T`The systematic study of ${npPlural(c)} began with the ${c.rng.pick(GLAZE)} memoir of ${surname(c)} ${cite(c)}.`,
+    T`Further progress was made in ${cite(c)}, where ${named(c)} was established for ${npPlural(c)}.`,
     sentence(c),
   ];
   const extra = c.rng.range(0, Math.round(2 * c.dials.paragraph));
@@ -451,15 +651,15 @@ export function literature(c: Ctx): Runs {
 export function notation(c: Ctx): Runs {
   const [a, b] = sym2(c);
   const sentences = [
-    T`${emph("Notation.")} Throughout, ${a} denotes ${an(buzz(c))} ${obj(c)} and ${b} its canonical ${obj(c)}.`,
+    T`${emph("Notation.")} Throughout, ${a} denotes ${aNp(c, { pp: false })} and ${b} its canonical ${obj(c)}.`,
     T`We write ${m(term(c.math, 1))} for the ${obj(c)} associated to ${sym(c)}.`,
-    T`All ${plural(obj(c))} are assumed ${buzz(c)} unless stated otherwise.`,
+    T`All ${plural(obj(c))} are assumed ${predList(c)} unless stated otherwise.`,
   ];
   if (c.rng.chance(c.dials.paragraph)) {
     sentences.push(T`Subscripts are omitted whenever ${sym(c)} is clear from context.`);
   }
   if (c.rng.chance(c.dials.paragraph * 0.7)) {
-    sentences.push(T`The symbol ${m(term(c.math, 0))} is reserved for ${an(buzz(c))} ${obj(c)}.`);
+    sentences.push(T`The symbol ${m(term(c.math, 0))} is reserved for ${aNp(c, { pp: false })}.`);
   }
   sentences.push(T`We use ${cite(c)} as a general reference for ${c.field}.`);
   return joinSentences(sentences);
@@ -470,8 +670,9 @@ export function abstractRuns(c: Ctx): Runs {
   const year = r.range(1995, 2024);
   const pool: Runs[] = [
     T`Our main result shows that ${rel(c)}, ${r.pick(["improving on", "sharpening", "extending"])} a bound of ${surname(c)} (${String(year)}).`,
-    T`As an application, we obtain ${an(buzz(c))} ${obj(c)} that ${iverb(c).third}.`,
-    T`The proof combines techniques from ${r.pick(FIELDS)} with ${buzz(c)} methods from ${r.pick(FIELDS)}.`,
+    T`As an application, we obtain ${aNp(c, { pp: false })} that ${iverb(c).third}.`,
+    T`The proof combines techniques from ${r.pick(FIELDS)} with ${predAdj(c)} methods from ${r.pick(FIELDS)}.`,
+    T`Recently, there has been much interest in the ${act(c)} of ${npPlural(c)}; this paper addresses the question of ${act(c)}.`,
     T`The methods are elementary and make no use of ${plural(obj(c))}.`,
     T`Some consequences for ${r.pick(FIELDS)} are discussed.`,
     T`This answers a question of ${surname(c)}.`,
@@ -493,7 +694,8 @@ export function conclusion(c: Ctx): Runs {
   const extra = c.rng.range(0, Math.round(2 * c.dials.paragraph));
   for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
   sentences.push(
-    T`Whether the ${buzz(c)} case admits a similar treatment remains open.`,
+    T`Whether the ${predAdj(c)} case admits a similar treatment remains open.`,
+    T`In future work, we plan to address questions of ${act(c)} as well as ${act(c)}.`,
     T`We hope to return to this question in future work.`,
   );
   return joinSentences(sentences);
