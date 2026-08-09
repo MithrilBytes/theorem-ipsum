@@ -12,13 +12,24 @@ import type { Block, ResultKind, Run, Runs } from "./doc.js";
 import { T, citeRun, emph, eqref, joinSentences, m, mergeText, resref, t } from "./doc.js";
 import {
   ADJECTIVES, ADVERBS, CLOSERS, FIELDS, GLAZE, HEDGES, IVERBS, NAMED_KINDS,
-  NATIONALITIES, OBJECTS, SURNAMES, VERBS, an, cap, plural, titleCase,
-  type Verb,
+  NATIONALITIES, OBJECTS, PREFIXES, SURNAMES, SURNAMES_REAL, SURNAMES_SILLY,
+  VERBS, an, cap, plural, titleCase, type Verb,
 } from "./vocab.js";
 
 export interface ProvedRef {
   kind: ResultKind;
   number: string;
+}
+
+export interface Dials {
+  /** Page length: sections, results, proof depth, references, authors. */
+  length: number;
+  /** Sentence length: subordinate clauses, longer relation chains. */
+  sentence: number;
+  /** Paragraph length: sentences per paragraph, connective weaving. */
+  paragraph: number;
+  /** Incoherence of the mathematical language. */
+  gobbledygook: number;
 }
 
 export interface Ctx {
@@ -34,8 +45,8 @@ export interface Ctx {
   equations: string[];
   /** Section label for equation numbering ("2", "A"); "" disables it. */
   eq: { label: string; count: number };
-  /** How much paper to generate, 0 to 1. 0.5 is the calibrated default. */
-  detail: number;
+  /** The four generation dials, each 0 to 1 with 0.5 the calibrated default. */
+  dials: Dials;
   /** Title ingredients, echoed by the abstract and conclusion. */
   theme: { verb: Verb; buzz: string; obj: string };
 }
@@ -44,14 +55,30 @@ export interface Ctx {
 /* Small pickers                                                       */
 /* ------------------------------------------------------------------ */
 
-const buzz = (c: Ctx) => c.rng.pick(ADJECTIVES);
-const buzz2 = (c: Ctx) => c.rng.sample(ADJECTIVES, 2);
+/** Stack pseudo-/quasi-/anti- prefixes as gobbledygook rises. */
+function decorate(c: Ctx, word: string): string {
+  const g = c.dials.gobbledygook;
+  if (c.rng.chance(lerp(0.02, 0.45, g))) word = `${c.rng.pick(PREFIXES)}${word}`;
+  if (c.rng.chance(lerp(0, 0.18, g))) word = `${c.rng.pick(PREFIXES)}${word}`;
+  return word;
+}
+
+const buzz = (c: Ctx) => decorate(c, c.rng.pick(ADJECTIVES));
+const buzz2 = (c: Ctx) => c.rng.sample(ADJECTIVES, 2).map((w) => decorate(c, w));
 const obj = (c: Ctx) => c.rng.pick(OBJECTS);
 const verb = (c: Ctx) => c.rng.pick(VERBS);
 const iverb = (c: Ctx) => c.rng.pick(IVERBS);
 const adverb = (c: Ctx) => c.rng.pick(ADVERBS);
-const surname = (c: Ctx) => c.rng.pick(SURNAMES);
-const surnames2 = (c: Ctx) => c.rng.sample(SURNAMES, 2);
+const surname = (c: Ctx) =>
+  c.rng.chance(lerp(0.25, 0.75, c.dials.gobbledygook))
+    ? c.rng.pick(SURNAMES_SILLY)
+    : c.rng.pick(SURNAMES_REAL);
+const surnames2 = (c: Ctx) => {
+  const first = surname(c);
+  let second = surname(c);
+  for (let i = 0; i < 4 && second === first; i++) second = surname(c);
+  return [first, second];
+};
 const hedge = (c: Ctx) => c.rng.pick(HEDGES);
 const named = (c: Ctx) => c.rng.pick(c.named);
 const rel = (c: Ctx) => m(relation(c.math));
@@ -171,26 +198,43 @@ function weave(c: Ctx, runs: Runs): Runs {
   ]);
 }
 
+/** Append a subordinate clause, splicing it in before the final period. */
+function extendSentence(c: Ctx, runs: Runs): Runs {
+  const last = runs[runs.length - 1];
+  if (last?.k !== "text" || !last.s.endsWith(".")) return runs;
+  const clause = c.rng.weighted<() => Runs>([
+    [() => T`, provided ${rel(c)}.`, 2],
+    [() => T`, whenever ${sym(c)} is ${buzz(c)}.`, 2],
+    [() => T`, in the sense of ${surname(c)} ${cite(c)}.`, 1.5],
+    [() => T`, though the converse fails ${adverb(c)}.`, 1.2],
+    [() => T`, as the reader may verify.`, 1],
+    [() => T`, and similarly for ${buzz(c)} ${plural(obj(c))}.`, 1.3],
+  ] as [() => Runs, number][])();
+  return mergeText([...runs.slice(0, -1), t(last.s.slice(0, -1)), ...clause]);
+}
+
 export function sentence(c: Ctx): Runs {
   const r = c.rng;
   let pool = SENTENCES;
   if (c.proved.length > 0 && r.chance(0.18)) pool = PROVED_SENTENCES;
   else if (c.equations.length > 0 && r.chance(0.12)) pool = EQ_SENTENCES;
-  return r.weighted(pool)(c);
+  let runs = r.weighted(pool)(c);
+  if (r.chance(lerp(0.06, 0.5, c.dials.sentence))) runs = extendSentence(c, runs);
+  return runs;
 }
 
 /** A paragraph whose length and display probability scale with detail. */
 export function paragraph(c: Ctx, opts: { display?: boolean } = {}): Block[] {
-  const d = c.detail;
-  const n = c.rng.range(Math.round(lerp(2, 5, d)), Math.round(lerp(4, 10, d)));
+  const p = c.dials.paragraph;
+  const n = c.rng.range(Math.round(lerp(2, 5, p)), Math.round(lerp(4, 10, p)));
   const sentences: Runs[] = [];
   for (let i = 0; i < n; i++) {
     let sent = sentence(c);
-    if (i > 0 && c.rng.chance(lerp(0.15, 0.35, d))) sent = weave(c, sent);
+    if (i > 0 && c.rng.chance(lerp(0.15, 0.4, p))) sent = weave(c, sent);
     sentences.push(sent);
   }
   const blocks: Block[] = [{ k: "para", runs: joinSentences(sentences) }];
-  const wantDisplay = opts.display ?? c.rng.chance(lerp(0.3, 0.6, d));
+  const wantDisplay = opts.display ?? c.rng.chance(lerp(0.3, 0.6, c.dials.length));
   if (wantDisplay) blocks.push(display(c));
   return blocks;
 }
@@ -299,13 +343,14 @@ function closer(c: Ctx): Runs {
 
 export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   const r = c.rng;
-  const d = c.detail;
+  const d = c.dials.length;
+  const pd = c.dials.paragraph;
   const deep = opts.deep ?? r.chance(lerp(0.1, 0.6, d));
   const blocks: Block[] = [];
   const opener = r.weighted(PROOF_OPENERS)(c);
   const mid = () => {
     const extra =
-      (r.chance(lerp(0.3, 0.6, d)) ? 1 : 0) + (r.chance(lerp(0, 0.35, d)) ? 1 : 0);
+      (r.chance(lerp(0.3, 0.6, pd)) ? 1 : 0) + (r.chance(lerp(0, 0.35, pd)) ? 1 : 0);
     const sentences = [sentence(c)];
     for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
     return joinSentences(sentences);
@@ -385,7 +430,7 @@ export function introOpener(c: Ctx): Runs {
     T`The purpose of the present paper is to ${v.base} it ${adverb(c)}.`,
     sentence(c),
   ];
-  if (c.rng.chance(c.detail)) sentences.push(weave(c, sentence(c)));
+  if (c.rng.chance(c.dials.paragraph)) sentences.push(weave(c, sentence(c)));
   return joinSentences(sentences);
 }
 
@@ -396,7 +441,7 @@ export function literature(c: Ctx): Runs {
     T`Further progress was made in ${cite(c)}, where ${named(c)} was established for ${buzz(c)} ${plural(obj(c))}.`,
     sentence(c),
   ];
-  const extra = c.rng.range(0, Math.round(2 * c.detail));
+  const extra = c.rng.range(0, Math.round(2 * c.dials.paragraph));
   for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
   sentences.push(T`For general background on ${c.field}, we refer the reader to ${cite(c)}.`);
   return joinSentences(sentences);
@@ -410,10 +455,10 @@ export function notation(c: Ctx): Runs {
     T`We write ${m(term(c.math, 1))} for the ${obj(c)} associated to ${sym(c)}.`,
     T`All ${plural(obj(c))} are assumed ${buzz(c)} unless stated otherwise.`,
   ];
-  if (c.rng.chance(c.detail)) {
+  if (c.rng.chance(c.dials.paragraph)) {
     sentences.push(T`Subscripts are omitted whenever ${sym(c)} is clear from context.`);
   }
-  if (c.rng.chance(c.detail * 0.7)) {
+  if (c.rng.chance(c.dials.paragraph * 0.7)) {
     sentences.push(T`The symbol ${m(term(c.math, 0))} is reserved for ${an(buzz(c))} ${obj(c)}.`);
   }
   sentences.push(T`We use ${cite(c)} as a general reference for ${c.field}.`);
@@ -445,7 +490,7 @@ export function conclusion(c: Ctx): Runs {
     sentence(c),
     sentence(c),
   ];
-  const extra = c.rng.range(0, Math.round(2 * c.detail));
+  const extra = c.rng.range(0, Math.round(2 * c.dials.paragraph));
   for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
   sentences.push(
     T`Whether the ${buzz(c)} case admits a similar treatment remains open.`,

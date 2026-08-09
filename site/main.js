@@ -1,9 +1,9 @@
 /* Theorem Ipsum demo. One full paper, generated client-side. */
 import { generatePaper, randomSeed, renderHtml, renderLatex } from "./theorem-ipsum.esm.js";
 
+const DIALS = ["length", "sentence", "paragraph", "gobbledygook"];
+
 const paperEl = document.getElementById("paper");
-const detailEl = document.getElementById("detail");
-const detailValueEl = document.getElementById("detail-value");
 let paper = null;
 let seedText = "";
 
@@ -11,17 +11,21 @@ function coerceSeed(raw) {
   return /^-?\d+$/.test(raw) ? Number(raw) : raw;
 }
 
-function detail() {
-  return Number(detailEl.value);
+function dialValue(name) {
+  return Number(document.getElementById(name).value);
 }
 
 function generate() {
-  paper = generatePaper({ seed: coerceSeed(seedText), detail: detail() });
-  paperEl.innerHTML = renderHtml(paper);
-  typeset(paperEl);
+  const opts = { seed: coerceSeed(seedText) };
   const params = new URLSearchParams();
   params.set("seed", seedText);
-  if (detail() !== 0.5) params.set("detail", detailEl.value);
+  for (const name of DIALS) {
+    opts[name] = dialValue(name);
+    if (opts[name] !== 0.5) params.set(name, String(opts[name]));
+  }
+  paper = generatePaper(opts);
+  paperEl.innerHTML = renderHtml(paper);
+  typeset(paperEl);
   history.replaceState(null, "", `${location.pathname}?${params}`);
 }
 
@@ -67,18 +71,24 @@ document.getElementById("download").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-let detailTimer;
-detailEl.addEventListener("input", () => {
-  detailValueEl.textContent = detail().toFixed(2);
-  clearTimeout(detailTimer);
-  detailTimer = setTimeout(generate, 150);
-});
+let dialTimer;
+for (const name of DIALS) {
+  const input = document.getElementById(name);
+  const readout = document.querySelector(`[data-value="${name}"]`);
+  input.addEventListener("input", () => {
+    readout.textContent = dialValue(name).toFixed(2);
+    clearTimeout(dialTimer);
+    dialTimer = setTimeout(generate, 150);
+  });
+}
 
 const params = new URLSearchParams(location.search);
 seedText = params.get("seed") ?? randomSeed();
-const initialDetail = Number(params.get("detail"));
-if (Number.isFinite(initialDetail) && params.get("detail") !== null) {
-  detailEl.value = String(Math.max(0, Math.min(1, initialDetail)));
+for (const name of DIALS) {
+  const raw = params.get(name);
+  if (raw !== null && Number.isFinite(Number(raw))) {
+    document.getElementById(name).value = String(Math.max(0, Math.min(1, Number(raw))));
+  }
+  document.querySelector(`[data-value="${name}"]`).textContent = dialValue(name).toFixed(2);
 }
-detailValueEl.textContent = detail().toFixed(2);
 generate();

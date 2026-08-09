@@ -21,7 +21,11 @@ Options:
                           or latex when --out ends in .tex)
   -k, --kind <kind>       paper | theorem | definition | abstract | equation
                           | paragraphs | title            (default: paper)
-  -d, --detail <0..1>     how much paper to generate (default: 0.5)
+      --length <0..1>     page length: sections, results, proofs, references
+      --sentence <0..1>   sentence length
+      --paragraph <0..1>  paragraph length
+      --gobbledygook <0..1>  incoherence of the mathematical language
+                          (each dial defaults to 0.5)
   -n, --count <n>         paragraph count for --kind paragraphs (default: 3)
       --sections <n>      number of sections, 3-10
       --refs <n>          number of bibliography entries
@@ -41,7 +45,10 @@ interface Args {
   format?: Format;
   kind: string;
   count: number;
-  detail?: number;
+  length?: number;
+  sentence?: number;
+  paragraph?: number;
+  gobbledygook?: number;
   sections?: number;
   refs?: number;
   out?: string;
@@ -84,8 +91,17 @@ function parseArgs(argv: string[]): Args {
       case "-n": case "--count":
         args.count = num(next(), a);
         break;
-      case "-d": case "--detail":
-        args.detail = num(next(), a);
+      case "--length":
+        args.length = num(next(), a);
+        break;
+      case "--sentence":
+        args.sentence = num(next(), a);
+        break;
+      case "--paragraph":
+        args.paragraph = num(next(), a);
+        break;
+      case "--gobbledygook":
+        args.gobbledygook = num(next(), a);
         break;
       case "--sections":
         args.sections = num(next(), a);
@@ -121,7 +137,15 @@ const opts = { seed: args.seed, format };
 let output: string;
 switch (args.kind) {
   case "paper":
-    output = theoremIpsum({ ...opts, detail: args.detail, sections: args.sections, references: args.refs });
+    output = theoremIpsum({
+      ...opts,
+      length: args.length,
+      sentence: args.sentence,
+      paragraph: args.paragraph,
+      gobbledygook: args.gobbledygook,
+      sections: args.sections,
+      references: args.refs,
+    });
     break;
   case "theorem": output = theorem(opts); break;
   case "definition": output = definition(opts); break;

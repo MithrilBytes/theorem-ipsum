@@ -57,8 +57,7 @@ export const FIELDS = [
   "symplectic geometry", "tropical geometry", "universal algebra", "zoncology",
 ] as const;
 
-export const SURNAMES = [
-  // Real mathematicians.
+export const SURNAMES_REAL = [
   "Abel", "Banach", "Bernstein", "Borel", "Cantor", "Cartan", "Cauchy",
   "Conway", "Curry", "Dedekind", "Eilenberg", "Erdős", "Euler", "Fréchet",
   "Frege", "Galois", "Gauss", "Grothendieck", "Gödel", "Hausdorff", "Hilbert",
@@ -66,12 +65,22 @@ export const SURNAMES = [
   "Minkowski", "Mumford", "Noether", "Pascal", "Peano", "Poincaré",
   "Ramanujan", "Riemann", "Russell", "Schröder", "Serre", "Sierpiński",
   "Tarski", "Ulam", "Weil", "Weyl", "Zeno", "Zilber", "Zorn",
-  // From sylvanfranklin/nonsense.
+] as const;
+
+// From sylvanfranklin/nonsense, plus names invented here.
+export const SURNAMES_SILLY = [
   "Nozzle", "Snaggle", "Wumpin", "Quabosh", "Barsik", "Sharik", "Pythis",
   "Rubble", "Fawkes", "Hitches", "Wager",
-  // Invented here.
   "Bumbershoot", "Crumb", "Fiddlecomb", "Grimble", "Hornswoggle", "Ostrander",
   "Pemberton", "Quill", "Thistlewood", "Vexler", "Wrenn",
+] as const;
+
+export const SURNAMES: readonly string[] = [...SURNAMES_REAL, ...SURNAMES_SILLY];
+
+/** Adjective prefixes stacked on at high gobbledygook. */
+export const PREFIXES = [
+  "pseudo-", "quasi-", "semi-", "anti-", "hyper-", "ultra-", "co-", "non-",
+  "bi-", "meta-",
 ] as const;
 
 export const NAMED_KINDS = [

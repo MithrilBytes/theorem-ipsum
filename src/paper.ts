@@ -9,9 +9,9 @@ import { FANCY, GREEK_LOWER, GREEK_UPPER, LATIN, type MathCtx } from "./math.js"
 import type { Author, Block, Paper, RefEntry, ResultKind, Runs, Section } from "./doc.js";
 import { T, joinSentences } from "./doc.js";
 import {
-  type Ctx, type ProvedRef, abstractRuns, acknowledgments, conclusion,
-  display, introOpener, literature, mainStatement, namedResult, notation,
-  paragraph, proof, shortProof, statement, titleCase,
+  type Ctx, type Dials, type ProvedRef, abstractRuns, acknowledgments,
+  conclusion, display, introOpener, literature, mainStatement, namedResult,
+  notation, paragraph, proof, shortProof, statement, titleCase,
 } from "./grammar.js";
 import {
   ADJECTIVES, FIELDS, MONTHS, NATIONALITIES, OBJECTS, PLACES, SURNAMES,
@@ -21,15 +21,25 @@ import {
 export interface PaperOptions {
   /** Any string or number; the same seed always yields the same paper. */
   seed?: Seed;
-  /** How much paper to generate, 0 to 1. Scales authors, sections, prose
-   * density, proof depth, and references; 1 also adds an appendix.
-   * Default 0.5, which is calibrated to a typical 8-page article. */
-  detail?: number;
-  /** Number of sections, 3 to 10. Overrides the detail-based default. */
+  /** Page length, 0 to 1: sections, results, proof depth, references,
+   * authors; 1 also adds an appendix. Default 0.5. */
+  length?: number;
+  /** Sentence length, 0 to 1: subordinate clauses and longer chains of
+   * relations. Default 0.5. */
+  sentence?: number;
+  /** Paragraph length, 0 to 1: sentences per paragraph and connective
+   * weaving. Default 0.5. */
+  paragraph?: number;
+  /** Incoherence of the mathematical language, 0 to 1: stacked
+   * pseudo-/quasi- prefixes, stray notation, sillier eponyms. Default 0.5. */
+  gobbledygook?: number;
+  /** Number of sections, 3 to 10. Overrides the length-based default. */
   sections?: number;
-  /** Number of bibliography entries. Overrides the detail-based default. */
+  /** Number of bibliography entries. Overrides the length-based default. */
   references?: number;
 }
+
+const DEFAULT_DIALS: Dials = { length: 0.5, sentence: 0.5, paragraph: 0.5, gobbledygook: 0.5 };
 
 export function randomSeed(): string {
   const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
@@ -37,12 +47,16 @@ export function randomSeed(): string {
   return `${a.replace(/\s+/g, "-")}-${o.replace(/\s+/g, "-")}-${Math.floor(Math.random() * 1000)}`;
 }
 
-export function makeCtx(seed: Seed, detail = 0.5): Ctx {
+export function makeCtx(seed: Seed, dials: Dials = DEFAULT_DIALS): Ctx {
   const rng = new Rng(seed);
   const boundPool = GREEK_LOWER.filter((s) => s.text !== "π");
   const scalars = [...rng.sample(LATIN, 4), ...rng.sample(boundPool, 3)];
   const palette = [...scalars, ...rng.sample(FANCY, 2), ...rng.sample(GREEK_UPPER, 1)];
-  const math: MathCtx = { rng, palette, scalars };
+  const math: MathCtx = {
+    rng, palette, scalars,
+    verbosity: dials.sentence,
+    scatter: dials.gobbledygook,
+  };
   return {
     rng,
     math,
@@ -52,7 +66,7 @@ export function makeCtx(seed: Seed, detail = 0.5): Ctx {
     proved: [],
     equations: [],
     eq: { label: "", count: 0 },
-    detail,
+    dials,
     theme: { verb: rng.pick(VERBS), buzz: rng.pick(ADJECTIVES), obj: rng.pick(OBJECTS) },
   };
 }
@@ -91,7 +105,7 @@ function makeAffiliation(c: Ctx): { text: string; place: string } {
 
 function makeAuthors(c: Ctx): Author[] {
   const r = c.rng;
-  const d = c.detail;
+  const d = c.dials.length;
   const n = r.weighted([
     [1, lerp(5, 0.5, d)], [2, lerp(3, 2, d)], [3, lerp(1.5, 3, d)],
     [4, lerp(0.3, 2.5, d)], [5, lerp(0, 1.5, d)], [6, lerp(0, 0.8, d)],
@@ -114,7 +128,7 @@ function makeAuthors(c: Ctx): Author[] {
 function makeMsc(c: Ctx): string[] {
   const r = c.rng;
   const tops = ["03", "05", "06", "11", "13", "14", "16", "18", "20", "22", "28", "30", "37", "46", "54", "55", "57", "60"];
-  const n = r.range(2, 3 + Math.round(2 * c.detail));
+  const n = r.range(2, 3 + Math.round(2 * c.dials.length));
   const out = new Set<string>();
   while (out.size < n) {
     out.add(`${r.pick(tops)}${r.pick([..."ABCDEFGHK"])}${r.range(0, 9)}${r.range(0, 9)}`);
@@ -242,7 +256,7 @@ function planSections(c: Ctx, total: number): SectionPlan[] {
   }
 
   plans.push({ type: "concluding", title: "Concluding remarks", topic: "open problems" });
-  if (c.rng.chance(Math.max(0, (c.detail - 0.55) * 2))) {
+  if (c.rng.chance(Math.max(0, (c.dials.length - 0.55) * 2))) {
     plans.push({ type: "appendix", title: "A technical lemma", topic: "a technical lemma" });
   }
   return plans;
@@ -369,7 +383,7 @@ function ensureDisplay(c: Ctx, blocks: Block[]): void {
 
 function buildSection(c: Ctx, index: number, plan: SectionPlan, main: ProvedRef): Section {
   const r = c.rng;
-  const d = c.detail;
+  const d = c.dials.length;
   const label = plan.type === "appendix" ? "A" : String(index);
   c.eq = { label, count: 0 };
   const counter: Counter = { n: 0 };
@@ -451,16 +465,22 @@ function paragraphLead(c: Ctx): Runs {
 
 export function generatePaper(opts: PaperOptions = {}): Paper {
   const seed = opts.seed ?? randomSeed();
-  const detail = clamp01(opts.detail ?? 0.5);
-  const c = makeCtx(seed, detail);
+  const dials: Dials = {
+    length: clamp01(opts.length ?? 0.5),
+    sentence: clamp01(opts.sentence ?? 0.5),
+    paragraph: clamp01(opts.paragraph ?? 0.5),
+    gobbledygook: clamp01(opts.gobbledygook ?? 0.5),
+  };
+  const len = dials.length;
+  const c = makeCtx(seed, dials);
   const r = c.rng;
 
   const totalSections = clamp(
-    opts.sections ?? r.range(Math.round(lerp(4, 10, detail)), Math.round(lerp(5, 12, detail))),
+    opts.sections ?? r.range(Math.round(lerp(4, 10, len)), Math.round(lerp(5, 12, len))),
     3, 10,
   );
   c.refCount = clamp(
-    opts.references ?? r.range(Math.round(lerp(6, 24, detail)), Math.round(lerp(8, 36, detail))),
+    opts.references ?? r.range(Math.round(lerp(6, 24, len)), Math.round(lerp(8, 36, len))),
     1, 60,
   );
 
@@ -475,7 +495,7 @@ export function generatePaper(opts: PaperOptions = {}): Paper {
     c.field,
     c.named[1].replace(/^the /, ""),
     `${r.pick(ADJECTIVES)} ${r.pick(OBJECTS)}`,
-  ].slice(0, 3 + Math.round(2 * detail));
+  ].slice(0, 3 + Math.round(2 * len));
   const msc = makeMsc(c);
 
   // Introduction: motivation, literature, the main theorem, organization.
@@ -487,7 +507,7 @@ export function generatePaper(opts: PaperOptions = {}): Paper {
     ...paragraph(c, { display: true }),
     { k: "para", runs: T`Our main result is the following.` },
   ];
-  if (detail > 0.7) introBlocks.splice(2, 0, ...paragraph(c));
+  if (len > 0.7) introBlocks.splice(2, 0, ...paragraph(c));
   const main: ProvedRef = { kind: "Theorem", number: `1.${++counter.n}` };
   introBlocks.push({
     k: "result", kind: main.kind, number: main.number, name: "Main Theorem",

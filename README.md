@@ -26,7 +26,10 @@ compiles four sample papers with Tectonic on every push.
 | Flag | Values |
 | --- | --- |
 | `-s, --seed` | any string or number |
-| `-d, --detail` | 0 to 1; scales authors, sections, proof depth, and references (default 0.5) |
+| `--length` | 0 to 1; page length: sections, results, proof depth, references, authors |
+| `--sentence` | 0 to 1; sentence length |
+| `--paragraph` | 0 to 1; paragraph length |
+| `--gobbledygook` | 0 to 1; incoherence of the mathematical language |
 | `-f, --format` | `latex`, `markdown`, `html`, `text` |
 | `-k, --kind` | `paper`, `theorem`, `definition`, `abstract`, `equation`, `paragraphs`, `title` |
 | `--sections` | section count, 3 to 10 |
@@ -45,7 +48,7 @@ import { theoremIpsum, generatePaper, render, theorem, equation } from "theorem-
 
 const tex = theoremIpsum({ seed: "perverse-sheaf-42", format: "latex" });
 
-const paper = generatePaper({ seed: 7, detail: 0.8 });
+const paper = generatePaper({ seed: 7, length: 0.8, gobbledygook: 0.9 });
 const md = render(paper, "markdown");
 const html = render(paper, "html");
 
@@ -78,10 +81,19 @@ formats.
 - At high detail, an appendix ("Appendix A. A technical lemma") with its
   own contributor, credited "with an appendix by ..." under the byline.
 
-The `detail` parameter (0 to 1) works like a temperature control: 0 yields
-a four-page note by a single author; 1 yields a twenty-page treatise with
-up to six authors, four-way case analyses, and the appendix. The demo
-exposes it as a slider.
+Generation is controlled by four dials, each 0 to 1 (default 0.5), exposed
+as sliders in the demo and flags in the CLI:
+
+- `length`: page length. 0 is a four-page note by a single author; 1 is a
+  twenty-page treatise with up to six authors, four-way case analyses, and
+  the appendix.
+- `sentence`: sentence length, via subordinate clauses and longer chains
+  of relations.
+- `paragraph`: paragraph length, via more sentences per paragraph and
+  connective weaving.
+- `gobbledygook`: incoherence of the mathematical language, via stacked
+  pseudo-/quasi-/hyper- prefixes, notation that strays from the paper's
+  palette, and increasingly silly eponyms.
 
 ## Development
 
