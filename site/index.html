@@ -29,25 +29,25 @@
     <button id="randomize">randomize</button>
     <button id="download" class="secondary">download .tex</button>
     <div class="dials">
-      <div class="dial">
-        <label for="length">length <span data-value="length">0.50</span></label>
+      <div class="dial" title="Page length: note to treatise">
+        <label for="length">length</label>
         <input id="length" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Page length">
-        <div class="dial-ends"><span>note</span><span>treatise</span></div>
+        <span class="dial-value" data-value="length">0.50</span>
       </div>
-      <div class="dial">
-        <label for="sentence">sentence <span data-value="sentence">0.50</span></label>
+      <div class="dial" title="Sentence length: terse to winding">
+        <label for="sentence">sentence</label>
         <input id="sentence" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Sentence length">
-        <div class="dial-ends"><span>terse</span><span>winding</span></div>
+        <span class="dial-value" data-value="sentence">0.50</span>
       </div>
-      <div class="dial">
-        <label for="paragraph">paragraph <span data-value="paragraph">0.50</span></label>
+      <div class="dial" title="Paragraph length: choppy to sprawling">
+        <label for="paragraph">paragraph</label>
         <input id="paragraph" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Paragraph length">
-        <div class="dial-ends"><span>choppy</span><span>sprawling</span></div>
+        <span class="dial-value" data-value="paragraph">0.50</span>
       </div>
-      <div class="dial">
-        <label for="gobbledygook">gobbledygook <span data-value="gobbledygook">0.50</span></label>
+      <div class="dial" title="Gobbledygook: sober to unhinged">
+        <label for="gobbledygook">gobbledygook</label>
         <input id="gobbledygook" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Gobbledygook">
-        <div class="dial-ends"><span>sober</span><span>unhinged</span></div>
+        <span class="dial-value" data-value="gobbledygook">0.50</span>
       </div>
     </div>
     <p class="install">

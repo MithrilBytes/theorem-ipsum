@@ -80,21 +80,36 @@ body {
 
 .side button:hover { filter: brightness(1.08); }
 
-/* generation dials */
+/* generation dials, one line */
 
-.dials { margin: 1.2rem 0 0; }
-
-.dial { margin-bottom: 0.85rem; }
-
-.dial label {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 0.78rem;
-  margin-bottom: 0.3rem;
+.dials {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 1.2rem 0 0;
 }
 
-.dial label span { color: var(--accent); }
+.dial {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.dial label {
+  font-size: 0.56rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--side-ink);
+}
+
+.dial-value {
+  font-size: 0.62rem;
+  text-align: center;
+  color: var(--accent);
+}
 
 .dial input[type="range"] {
   -webkit-appearance: none;
@@ -111,8 +126,8 @@ body {
 .dial input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg);
@@ -120,18 +135,11 @@ body {
 }
 
 .dial input[type="range"]::-moz-range-thumb {
-  width: 13px;
-  height: 13px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg);
-}
-
-.dial-ends {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.62rem;
-  color: var(--side-muted);
 }
 
 .side .install {
