@@ -1,6 +1,7 @@
 {
   "name": "theorem-ipsum",
   "version": "0.1.0",
+  "private": true,
   "description": "Placeholder text for the mathematically inclined: seeded, rigorous-looking nonsense papers, theorems, and equations in LaTeX, Markdown, HTML, or plain text.",
   "type": "module",
   "license": "MIT",
@@ -31,9 +32,6 @@
   "bin": {
     "theorem-ipsum": "dist/cli.js"
   },
-  "files": [
-    "dist"
-  ],
   "engines": {
     "node": ">=18"
   },
@@ -42,8 +40,7 @@
     "build:site": "esbuild src/index.ts --bundle --format=esm --minify --outfile=site/theorem-ipsum.esm.js",
     "dev": "esbuild src/index.ts --bundle --format=esm --outfile=site/theorem-ipsum.esm.js --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/katex": "^0.16.7",

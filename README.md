@@ -11,13 +11,16 @@ A successor to [sylvanfranklin/nonsense](https://github.com/sylvanfranklin/nonse
 (Typst) and [mathgen](https://thatsmathematics.com/mathgen/). The same seed
 always produces the same paper.
 
+Not published to npm; clone and build locally.
+
 ## CLI
 
 ```bash
-npx theorem-ipsum                          # plain-text paper, random seed
-npx theorem-ipsum --seed 42 -f latex -o paper.tex
-npx theorem-ipsum -k theorem -f markdown   # one theorem with proof
-npx theorem-ipsum -k equation -f latex     # one display equation
+npm install && npm run build
+node dist/cli.js                           # plain-text paper, random seed
+node dist/cli.js --seed 42 -f latex -o paper.tex
+node dist/cli.js -k theorem -f markdown    # one theorem with proof
+node dist/cli.js -k equation -f latex      # one display equation
 ```
 
 The LaTeX output is a complete amsart document that compiles as-is. CI
@@ -39,12 +42,8 @@ compiles four sample papers with Tectonic on every push.
 
 ## Library
 
-```bash
-npm install theorem-ipsum
-```
-
 ```js
-import { theoremIpsum, generatePaper, render, theorem, equation } from "theorem-ipsum";
+import { theoremIpsum, generatePaper, render, theorem, equation } from "./dist/index.js";
 
 const tex = theoremIpsum({ seed: "perverse-sheaf-42", format: "latex" });
 
@@ -106,8 +105,15 @@ npm run build:site  # browser bundle to site/theorem-ipsum.esm.js
 python3 -m http.server 4173 --directory site
 ```
 
-The demo deploys to GitHub Pages on push to `main`. One-time setup:
-Settings, Pages, Source: GitHub Actions.
+GitHub Actions:
+
+- `ci.yml`: typecheck, tests, builds, and Tectonic compilation of four
+  sample papers on every push and pull request.
+- `pages.yml`: deploys the demo to GitHub Pages on push to `main`.
+  One-time setup: Settings, Pages, Source: GitHub Actions.
+- `daily.yml`: every day at 12:00 UTC, generates the paper of the day
+  (seeded by the date), compiles it, and publishes the PDF and LaTeX
+  source as a GitHub release.
 
 ## License
 
