@@ -1,0 +1,43 @@
+name: Daily paper
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Generate the paper of the day
+        id: gen
+        run: |
+          seed=$(date -u +%F)
+          npx esbuild src/cli.ts --bundle --format=esm --platform=node --outfile=/tmp/cli.mjs
+          node /tmp/cli.mjs --seed "$seed" -f latex -o "theorem-ipsum-$seed.tex"
+          title=$(grep -m1 '^\\title{' "theorem-ipsum-$seed.tex" | sed -e 's/^\\title{//' -e 's/}$//')
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+      - uses: wtfjoke/setup-tectonic@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: tectonic "theorem-ipsum-${{ steps.gen.outputs.seed }}.tex"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          seed="${{ steps.gen.outputs.seed }}"
+          gh release delete "daily-$seed" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "daily-$seed" \
+            --title "${{ steps.gen.outputs.title }}" \
+            --notes "Paper of the day, seed \`$seed\`. Reproduce it at https://mithrilbytes.github.io/theorem-ipsum/?seed=$seed" \
+            "theorem-ipsum-$seed.tex" "theorem-ipsum-$seed.pdf"
