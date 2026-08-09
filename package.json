@@ -1,0 +1,56 @@
+{
+  "name": "theorem-ipsum",
+  "version": "0.1.0",
+  "description": "Placeholder text for the mathematically inclined: seeded, rigorous-looking nonsense papers, theorems, and equations in LaTeX, Markdown, HTML, or plain text.",
+  "type": "module",
+  "license": "MIT",
+  "author": "MithrilBytes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MithrilBytes/theorem-ipsum.git"
+  },
+  "homepage": "https://mithrilbytes.github.io/theorem-ipsum/",
+  "keywords": [
+    "lorem-ipsum",
+    "placeholder",
+    "math",
+    "latex",
+    "katex",
+    "generator",
+    "mathgen",
+    "parody"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "theorem-ipsum": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:site": "esbuild src/index.ts --bundle --format=esm --minify --outfile=site/theorem-ipsum.esm.js",
+    "dev": "esbuild src/index.ts --bundle --format=esm --outfile=site/theorem-ipsum.esm.js --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/katex": "^0.16.7",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "katex": "^0.16.21",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
