@@ -60,6 +60,27 @@ body {
 .side p { margin: 0 0 1rem; color: var(--side-muted); }
 .side a { color: var(--accent); }
 
+.seed-label {
+  display: block;
+  font-size: 0.56rem;
+  margin-bottom: 0.25rem;
+}
+
+#seed {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--side-ink);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+#seed:focus { outline: none; border-color: var(--accent); }
+
 .side button {
   display: block;
   width: 100%;
