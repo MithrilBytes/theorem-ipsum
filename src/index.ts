@@ -1,7 +1,7 @@
 /**
  * theorem-ipsum: seeded generator of nonsense mathematics papers.
  *
- *   import { theoremIpsum } from "theorem-ipsum";
+ *   import { theoremIpsum } from "./dist/index.js";
  *   console.log(theoremIpsum({ seed: 42, format: "latex" }));
  */
 import type { Block, Paper } from "./doc.js";

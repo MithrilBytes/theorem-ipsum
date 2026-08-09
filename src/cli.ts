@@ -2,8 +2,8 @@
 /**
  * theorem-ipsum CLI.
  *
- *   npx theorem-ipsum --seed 42 --format latex > paper.tex
- *   npx theorem-ipsum -k theorem -f markdown
+ *   node dist/cli.js --seed 42 --format latex > paper.tex
+ *   node dist/cli.js -k theorem -f markdown
  */
 import { writeFileSync } from "node:fs";
 import {
