@@ -9,7 +9,7 @@ import { lerp, type Rng } from "./rng.js";
 import type { Expr, MathCtx } from "./math.js";
 import { displayExpr, distinctSyms, pureSym, relation, term } from "./math.js";
 import type { Block, ResultKind, Run, Runs } from "./doc.js";
-import { T, citeRun, emph, eqref, joinSentences, m, resref, t } from "./doc.js";
+import { T, citeRun, emph, eqref, joinSentences, m, mergeText, resref, t } from "./doc.js";
 import {
   ADJECTIVES, ADVERBS, CLOSERS, FIELDS, GLAZE, HEDGES, IVERBS, NAMED_KINDS,
   NATIONALITIES, OBJECTS, SURNAMES, VERBS, an, cap, plural, titleCase,
@@ -150,6 +150,27 @@ const EQ_SENTENCES: [SGen, number][] = [
   [(c) => T`Substituting into ${eqRef(c)} gives ${rel(c)}.`, 1.5],
 ];
 
+const CONNECTIVES = ["Moreover,", "Furthermore,", "In fact,", "Indeed,", "Likewise,"];
+
+// Sentence starts that already carry their own transition.
+const NO_PREFIX = [
+  "In particular", "Hence", "More generally", "On the other hand", "This ",
+  "Surprisingly", "Throughout", "It is not known",
+];
+
+/** Prefix a sentence with a connective, lowercasing its first word. */
+function weave(c: Ctx, runs: Runs): Runs {
+  const first = runs[0];
+  if (first?.k !== "text") return runs;
+  if (NO_PREFIX.some((p) => first.s.startsWith(p))) return runs;
+  const lowered = first.s.charAt(0).toLowerCase() + first.s.slice(1);
+  return mergeText([
+    t(`${c.rng.pick(CONNECTIVES)} `),
+    { k: "text", s: lowered },
+    ...runs.slice(1),
+  ]);
+}
+
 export function sentence(c: Ctx): Runs {
   const r = c.rng;
   let pool = SENTENCES;
@@ -161,9 +182,14 @@ export function sentence(c: Ctx): Runs {
 /** A paragraph whose length and display probability scale with detail. */
 export function paragraph(c: Ctx, opts: { display?: boolean } = {}): Block[] {
   const d = c.detail;
-  const n = c.rng.range(Math.round(lerp(2, 4, d)), Math.round(lerp(4, 8, d)));
-  const runs = joinSentences(Array.from({ length: n }, () => sentence(c)));
-  const blocks: Block[] = [{ k: "para", runs }];
+  const n = c.rng.range(Math.round(lerp(2, 5, d)), Math.round(lerp(4, 10, d)));
+  const sentences: Runs[] = [];
+  for (let i = 0; i < n; i++) {
+    let sent = sentence(c);
+    if (i > 0 && c.rng.chance(lerp(0.15, 0.35, d))) sent = weave(c, sent);
+    sentences.push(sent);
+  }
+  const blocks: Block[] = [{ k: "para", runs: joinSentences(sentences) }];
   const wantDisplay = opts.display ?? c.rng.chance(lerp(0.3, 0.6, d));
   if (wantDisplay) blocks.push(display(c));
   return blocks;
@@ -277,7 +303,13 @@ export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   const deep = opts.deep ?? r.chance(lerp(0.1, 0.6, d));
   const blocks: Block[] = [];
   const opener = r.weighted(PROOF_OPENERS)(c);
-  const mid = () => joinSentences([sentence(c), ...(r.chance(0.4) ? [sentence(c)] : [])]);
+  const mid = () => {
+    const extra =
+      (r.chance(lerp(0.3, 0.6, d)) ? 1 : 0) + (r.chance(lerp(0, 0.35, d)) ? 1 : 0);
+    const sentences = [sentence(c)];
+    for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
+    return joinSentences(sentences);
+  };
 
   const shape = r.weighted([
     ["chain", 3], ["cases", 1.6], ["induction", deep ? 2 : 1],
@@ -348,11 +380,13 @@ export function shortProof(c: Ctx): Block[] {
 
 export function introOpener(c: Ctx): Runs {
   const { verb: v, buzz: b, obj: o } = c.theme;
-  return joinSentences([
+  const sentences = [
     T`In ${c.field}, ${c.named[0]} for ${b} ${plural(o)} has long been considered ${v.able}${c.rng.chance(0.5) ? ", if not " + adverb(c) + " so" : ""}.`,
     T`The purpose of the present paper is to ${v.base} it ${adverb(c)}.`,
     sentence(c),
-  ]);
+  ];
+  if (c.rng.chance(c.detail)) sentences.push(weave(c, sentence(c)));
+  return joinSentences(sentences);
 }
 
 /** A literature-review paragraph for the introduction. */
@@ -361,8 +395,10 @@ export function literature(c: Ctx): Runs {
     T`The systematic study of ${buzz(c)} ${plural(obj(c))} began with the ${c.rng.pick(GLAZE)} memoir of ${surname(c)} ${cite(c)}.`,
     T`Further progress was made in ${cite(c)}, where ${named(c)} was established for ${buzz(c)} ${plural(obj(c))}.`,
     sentence(c),
-    T`For general background on ${c.field}, we refer the reader to ${cite(c)}.`,
   ];
+  const extra = c.rng.range(0, Math.round(2 * c.detail));
+  for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
+  sentences.push(T`For general background on ${c.field}, we refer the reader to ${cite(c)}.`);
   return joinSentences(sentences);
 }
 
@@ -373,8 +409,14 @@ export function notation(c: Ctx): Runs {
     T`${emph("Notation.")} Throughout, ${a} denotes ${an(buzz(c))} ${obj(c)} and ${b} its canonical ${obj(c)}.`,
     T`We write ${m(term(c.math, 1))} for the ${obj(c)} associated to ${sym(c)}.`,
     T`All ${plural(obj(c))} are assumed ${buzz(c)} unless stated otherwise.`,
-    T`We use ${cite(c)} as a general reference for ${c.field}.`,
   ];
+  if (c.rng.chance(c.detail)) {
+    sentences.push(T`Subscripts are omitted whenever ${sym(c)} is clear from context.`);
+  }
+  if (c.rng.chance(c.detail * 0.7)) {
+    sentences.push(T`The symbol ${m(term(c.math, 0))} is reserved for ${an(buzz(c))} ${obj(c)}.`);
+  }
+  sentences.push(T`We use ${cite(c)} as a general reference for ${c.field}.`);
   return joinSentences(sentences);
 }
 
@@ -398,13 +440,18 @@ export function abstractRuns(c: Ctx): Runs {
 
 export function conclusion(c: Ctx): Runs {
   const { verb: v, buzz: b, obj: o } = c.theme;
-  return joinSentences([
+  const sentences = [
     T`We have ${v.past} ${c.named[0]} for every ${b} ${o}.`,
     sentence(c),
     sentence(c),
+  ];
+  const extra = c.rng.range(0, Math.round(2 * c.detail));
+  for (let i = 0; i < extra; i++) sentences.push(weave(c, sentence(c)));
+  sentences.push(
     T`Whether the ${buzz(c)} case admits a similar treatment remains open.`,
     T`We hope to return to this question in future work.`,
-  ]);
+  );
+  return joinSentences(sentences);
 }
 
 export function acknowledgments(c: Ctx): Runs {
