@@ -26,6 +26,7 @@ compiles four sample papers with Tectonic on every push.
 | Flag | Values |
 | --- | --- |
 | `-s, --seed` | any string or number |
+| `-d, --detail` | 0 to 1; scales authors, sections, proof depth, and references (default 0.5) |
 | `-f, --format` | `latex`, `markdown`, `html`, `text` |
 | `-k, --kind` | `paper`, `theorem`, `definition`, `abstract`, `equation`, `paragraphs`, `title` |
 | `--sections` | section count, 3 to 10 |
@@ -44,7 +45,7 @@ import { theoremIpsum, generatePaper, render, theorem, equation } from "theorem-
 
 const tex = theoremIpsum({ seed: "perverse-sheaf-42", format: "latex" });
 
-const paper = generatePaper({ seed: 7, sections: 6, references: 18 });
+const paper = generatePaper({ seed: 7, detail: 0.8 });
 const md = render(paper, "markdown");
 const html = render(paper, "html");
 
@@ -74,6 +75,13 @@ formats.
   citations that always resolve to the bibliography.
 - An alphabetized bibliography mixing journal articles, books, Ph.D.
   theses, and arXiv preprints, all dated no later than the paper.
+- At high detail, an appendix ("Appendix A. A technical lemma") with its
+  own contributor, credited "with an appendix by ..." under the byline.
+
+The `detail` parameter (0 to 1) works like a temperature control: 0 yields
+a four-page note by a single author; 1 yields a twenty-page treatise with
+up to six authors, four-way case analyses, and the appendix. The demo
+exposes it as a slider.
 
 ## Development
 

@@ -5,7 +5,7 @@
  * at bibliography entries that exist, and later prose can lean on results and
  * numbered equations already stated.
  */
-import type { Rng } from "./rng.js";
+import { lerp, type Rng } from "./rng.js";
 import type { Expr, MathCtx } from "./math.js";
 import { displayExpr, distinctSyms, pureSym, relation, term } from "./math.js";
 import type { Block, ResultKind, Run, Runs } from "./doc.js";
@@ -32,8 +32,10 @@ export interface Ctx {
   proved: ProvedRef[];
   /** Numbered display equations already emitted, e.g. "2.3". */
   equations: string[];
-  /** Current section for equation numbering; 0 disables numbering. */
-  eq: { section: number; count: number };
+  /** Section label for equation numbering ("2", "A"); "" disables it. */
+  eq: { label: string; count: number };
+  /** How much paper to generate, 0 to 1. 0.5 is the calibrated default. */
+  detail: number;
   /** Title ingredients, echoed by the abstract and conclusion. */
   theme: { verb: Verb; buzz: string; obj: string };
 }
@@ -89,11 +91,11 @@ export function namedResult(rng: Rng): string {
   return rng.weighted(patterns)();
 }
 
-/** A display block; numbered with probability 0.45 when numbering is active. */
+/** A display block; numbered with detail-scaled probability when active. */
 export function display(c: Ctx, e?: Expr): Block {
   const expr = e ?? displayExpr(c.math);
-  if (c.eq.section > 0 && c.rng.chance(0.45)) {
-    const no = `${c.eq.section}.${++c.eq.count}`;
+  if (c.eq.label && c.rng.chance(0.45)) {
+    const no = `${c.eq.label}.${++c.eq.count}`;
     c.equations.push(no);
     return { k: "display", e: expr, no };
   }
@@ -156,12 +158,13 @@ export function sentence(c: Ctx): Runs {
   return r.weighted(pool)(c);
 }
 
-/** A paragraph of 3 to 6 sentences, optionally followed by a display. */
+/** A paragraph whose length and display probability scale with detail. */
 export function paragraph(c: Ctx, opts: { display?: boolean } = {}): Block[] {
-  const n = c.rng.range(3, 6);
+  const d = c.detail;
+  const n = c.rng.range(Math.round(lerp(2, 4, d)), Math.round(lerp(4, 8, d)));
   const runs = joinSentences(Array.from({ length: n }, () => sentence(c)));
   const blocks: Block[] = [{ k: "para", runs }];
-  const wantDisplay = opts.display ?? c.rng.chance(0.45);
+  const wantDisplay = opts.display ?? c.rng.chance(lerp(0.3, 0.6, d));
   if (wantDisplay) blocks.push(display(c));
   return blocks;
 }
@@ -270,7 +273,8 @@ function closer(c: Ctx): Runs {
 
 export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   const r = c.rng;
-  const deep = opts.deep ?? r.chance(0.3);
+  const d = c.detail;
+  const deep = opts.deep ?? r.chance(lerp(0.1, 0.6, d));
   const blocks: Block[] = [];
   const opener = r.weighted(PROOF_OPENERS)(c);
   const mid = () => joinSentences([sentence(c), ...(r.chance(0.4) ? [sentence(c)] : [])]);
@@ -290,7 +294,7 @@ export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
       runs: joinSentences([T`For the inductive step, assume ${rel(c)}.`, mid(), T`It follows that`]),
     });
     blocks.push(display(c));
-    if (deep || r.chance(0.5)) {
+    if (deep || r.chance(lerp(0.3, 0.8, d))) {
       blocks.push({ k: "para", runs: joinSentences([sentence(c), T`Consequently,`]) });
       blocks.push(display(c));
     }
@@ -299,19 +303,18 @@ export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   }
 
   if (shape === "cases") {
-    const three = deep && r.chance(0.5);
-    blocks.push({
-      k: "para",
-      runs: joinSentences([opener, three ? T`We distinguish three cases.` : T`We distinguish two cases.`]),
-    });
-    blocks.push({ k: "para", runs: T`${emph("Case 1.")} Here ${rel(c)}, so that` });
-    blocks.push(display(c));
-    if (three) {
-      blocks.push({ k: "para", runs: T`${emph("Case 2.")} Suppose instead that ${rel(c)}. Then` });
+    const extra1 = (deep || r.chance(lerp(0, 0.7, d))) ? 1 : 0;
+    const extra2 = extra1 && r.chance(lerp(0, 0.35, d)) ? 1 : 0;
+    const n = 2 + extra1 + extra2;
+    const words = ["two", "three", "four"][n - 2];
+    blocks.push({ k: "para", runs: joinSentences([opener, T`We distinguish ${words} cases.`]) });
+    for (let i = 1; i <= n; i++) {
+      const label = emph(`Case ${i}.`);
+      if (i === 1) blocks.push({ k: "para", runs: T`${label} Here ${rel(c)}, so that` });
+      else if (i === n) blocks.push({ k: "para", runs: T`${label} Otherwise ${rel(c)}, and` });
+      else blocks.push({ k: "para", runs: T`${label} Suppose instead that ${rel(c)}. Then` });
       blocks.push(display(c));
     }
-    blocks.push({ k: "para", runs: T`${emph(three ? "Case 3." : "Case 2.")} Otherwise ${rel(c)}, and` });
-    blocks.push(display(c));
     blocks.push({ k: "para", runs: joinSentences([T`In each case the claim follows.`, closer(c)]) });
     return blocks;
   }
@@ -320,11 +323,11 @@ export function proof(c: Ctx, opts: { deep?: boolean } = {}): Block[] {
   blocks.push(display(c));
   blocks.push({ k: "para", runs: joinSentences([sentence(c), T`Combining this with ${cite(c)}, we obtain`]) });
   blocks.push(display(c));
-  if (deep || r.chance(0.45)) {
+  if (deep || r.chance(lerp(0.25, 0.75, d))) {
     blocks.push({ k: "para", runs: joinSentences([sentence(c), T`Consequently,`]) });
     blocks.push(display(c));
   }
-  if (r.chance(0.25)) {
+  if (r.chance(lerp(0.15, 0.4, d))) {
     blocks.push({ k: "para", runs: joinSentences([mid(), T`We conclude that`]) });
     blocks.push(display(c));
   } else {

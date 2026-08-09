@@ -21,6 +21,7 @@ Options:
                           or latex when --out ends in .tex)
   -k, --kind <kind>       paper | theorem | definition | abstract | equation
                           | paragraphs | title            (default: paper)
+  -d, --detail <0..1>     how much paper to generate (default: 0.5)
   -n, --count <n>         paragraph count for --kind paragraphs (default: 3)
       --sections <n>      number of sections, 3-10
       --refs <n>          number of bibliography entries
@@ -40,6 +41,7 @@ interface Args {
   format?: Format;
   kind: string;
   count: number;
+  detail?: number;
   sections?: number;
   refs?: number;
   out?: string;
@@ -82,6 +84,9 @@ function parseArgs(argv: string[]): Args {
       case "-n": case "--count":
         args.count = num(next(), a);
         break;
+      case "-d": case "--detail":
+        args.detail = num(next(), a);
+        break;
       case "--sections":
         args.sections = num(next(), a);
         break;
@@ -116,7 +121,7 @@ const opts = { seed: args.seed, format };
 let output: string;
 switch (args.kind) {
   case "paper":
-    output = theoremIpsum({ ...opts, sections: args.sections, references: args.refs });
+    output = theoremIpsum({ ...opts, detail: args.detail, sections: args.sections, references: args.refs });
     break;
   case "theorem": output = theorem(opts); break;
   case "definition": output = definition(opts); break;

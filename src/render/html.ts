@@ -92,10 +92,10 @@ export function renderHtml(paper: Paper): string {
     .join("\n");
 
   const sections = paper.sections
-    .map(
-      (s, i) =>
-        `<section>\n<h2>${i + 1}. ${escapeHtml(s.title)}</h2>\n${blocks(s.blocks)}\n</section>`,
-    )
+    .map((s, i) => {
+      const head = s.appendix ? `Appendix A. ${escapeHtml(s.title)}` : `${i + 1}. ${escapeHtml(s.title)}`;
+      return `<section>\n<h2>${head}</h2>\n${blocks(s.blocks)}\n</section>`;
+    })
     .join("\n");
 
   const addresses = paper.authors
@@ -111,7 +111,7 @@ export function renderHtml(paper: Paper): string {
 <div class="ti-authors">
 ${authors}
 </div>
-<div class="ti-date">${escapeHtml(paper.date)}</div>
+${paper.appendixBy ? `<div class="ti-contrib">with an appendix by ${escapeHtml(paper.appendixBy)}</div>\n` : ""}<div class="ti-date">${escapeHtml(paper.date)}</div>
 </header>
 <section class="ti-abstract">
 <p><span class="ti-abstract-head">Abstract.</span> ${runs(paper.abstract)}</p>

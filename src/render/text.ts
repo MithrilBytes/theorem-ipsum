@@ -103,13 +103,15 @@ export function renderText(paper: Paper): string {
   const parts: string[] = [];
   parts.push(center(wrap(paper.title.toUpperCase())));
   parts.push(center(paper.authors.map((a) => a.name).join(", ")));
+  if (paper.appendixBy) parts.push(center(`with an appendix by ${paper.appendixBy}`));
   parts.push(center(paper.date));
   parts.push("");
   parts.push(wrap(`ABSTRACT. ${runsToString(paper.abstract)}`, "   "));
   parts.push("");
 
   paper.sections.forEach((s, i) => {
-    parts.push(center(`${i + 1}. ${s.title.toUpperCase()}`));
+    const head = s.appendix ? `APPENDIX A. ${s.title.toUpperCase()}` : `${i + 1}. ${s.title.toUpperCase()}`;
+    parts.push(center(head));
     parts.push("");
     parts.push(blocks(s.blocks));
     parts.push("");

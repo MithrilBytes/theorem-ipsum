@@ -61,12 +61,16 @@ export interface RefEntry {
 export interface Section {
   title: string;
   blocks: Block[];
+  /** The appendix renders as "Appendix A" and numbers its results A.1, A.2. */
+  appendix?: boolean;
 }
 
 export interface Paper {
   seed: Seed;
   title: string;
   authors: Author[];
+  /** Contributor credited "with an appendix by ..." when an appendix exists. */
+  appendixBy?: string;
   date: string;
   abstract: Runs;
   keywords: string[];

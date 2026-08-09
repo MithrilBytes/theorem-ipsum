@@ -4,7 +4,7 @@
  * \numberwithin{equation}{section}, so cross-references agree in every
  * output format.
  */
-import { Rng, type Seed } from "./rng.js";
+import { Rng, lerp, type Seed } from "./rng.js";
 import { FANCY, GREEK_LOWER, GREEK_UPPER, LATIN, type MathCtx } from "./math.js";
 import type { Author, Block, Paper, RefEntry, ResultKind, Runs, Section } from "./doc.js";
 import { T, joinSentences } from "./doc.js";
@@ -21,9 +21,13 @@ import {
 export interface PaperOptions {
   /** Any string or number; the same seed always yields the same paper. */
   seed?: Seed;
-  /** Number of sections, 3 to 10. Default: seeded choice of 7 to 9. */
+  /** How much paper to generate, 0 to 1. Scales authors, sections, prose
+   * density, proof depth, and references; 1 also adds an appendix.
+   * Default 0.5, which is calibrated to a typical 8-page article. */
+  detail?: number;
+  /** Number of sections, 3 to 10. Overrides the detail-based default. */
   sections?: number;
-  /** Number of bibliography entries. Default: seeded choice of 15 to 22. */
+  /** Number of bibliography entries. Overrides the detail-based default. */
   references?: number;
 }
 
@@ -33,7 +37,7 @@ export function randomSeed(): string {
   return `${a.replace(/\s+/g, "-")}-${o.replace(/\s+/g, "-")}-${Math.floor(Math.random() * 1000)}`;
 }
 
-export function makeCtx(seed: Seed): Ctx {
+export function makeCtx(seed: Seed, detail = 0.5): Ctx {
   const rng = new Rng(seed);
   const boundPool = GREEK_LOWER.filter((s) => s.text !== "π");
   const scalars = [...rng.sample(LATIN, 4), ...rng.sample(boundPool, 3)];
@@ -47,7 +51,8 @@ export function makeCtx(seed: Seed): Ctx {
     refCount: 18,
     proved: [],
     equations: [],
-    eq: { section: 0, count: 0 },
+    eq: { label: "", count: 0 },
+    detail,
     theme: { verb: rng.pick(VERBS), buzz: rng.pick(ADJECTIVES), obj: rng.pick(OBJECTS) },
   };
 }
@@ -86,7 +91,11 @@ function makeAffiliation(c: Ctx): { text: string; place: string } {
 
 function makeAuthors(c: Ctx): Author[] {
   const r = c.rng;
-  const n = r.weighted([[1, 3], [2, 4], [3, 2]] as const);
+  const d = c.detail;
+  const n = r.weighted([
+    [1, lerp(5, 0.5, d)], [2, lerp(3, 2, d)], [3, lerp(1.5, 3, d)],
+    [4, lerp(0.3, 2.5, d)], [5, lerp(0, 1.5, d)], [6, lerp(0, 0.8, d)],
+  ] as const);
   const surnames = r.sample(SURNAMES, n);
   const letters = "ABCDEFGHJKLMNPQRSTVW";
   return surnames.map((s) => {
@@ -105,7 +114,7 @@ function makeAuthors(c: Ctx): Author[] {
 function makeMsc(c: Ctx): string[] {
   const r = c.rng;
   const tops = ["03", "05", "06", "11", "13", "14", "16", "18", "20", "22", "28", "30", "37", "46", "54", "55", "57", "60"];
-  const n = r.range(2, 4);
+  const n = r.range(2, 3 + Math.round(2 * c.detail));
   const out = new Set<string>();
   while (out.size < n) {
     out.add(`${r.pick(tops)}${r.pick([..."ABCDEFGHK"])}${r.range(0, 9)}${r.range(0, 9)}`);
@@ -191,7 +200,7 @@ function makeReference(c: Ctx, paperYear: number): RefEntry {
 /* Section planning                                                    */
 /* ------------------------------------------------------------------ */
 
-type SecType = "intro" | "prelim" | "topic" | "proofsec" | "apps" | "concluding";
+type SecType = "intro" | "prelim" | "topic" | "proofsec" | "apps" | "concluding" | "appendix";
 
 interface SectionPlan {
   type: SecType;
@@ -233,6 +242,9 @@ function planSections(c: Ctx, total: number): SectionPlan[] {
   }
 
   plans.push({ type: "concluding", title: "Concluding remarks", topic: "open problems" });
+  if (c.rng.chance(Math.max(0, (c.detail - 0.55) * 2))) {
+    plans.push({ type: "appendix", title: "A technical lemma", topic: "a technical lemma" });
+  }
   return plans;
 }
 
@@ -267,6 +279,9 @@ function organization(c: Ctx, plans: SectionPlan[]): Runs {
       case "concluding":
         sentences.push(T`We conclude in Section ${n} with some open problems.`);
         break;
+      case "appendix":
+        sentences.push(T`The appendix contains the proof of a technical lemma.`);
+        break;
       default:
         break;
     }
@@ -285,11 +300,11 @@ interface Counter {
 function result(
   c: Ctx,
   kind: ResultKind,
-  sectionIndex: number,
+  sectionLabel: string | number,
   counter: Counter,
   opts: { name?: string; forceProof?: boolean } = {},
 ): Block {
-  const number = `${sectionIndex}.${++counter.n}`;
+  const number = `${sectionLabel}.${++counter.n}`;
   const provable = kind === "Theorem" || kind === "Proposition" || kind === "Lemma";
   const block: Block = {
     k: "result",
@@ -325,7 +340,7 @@ const APPS_KINDS: [ResultKind, number][] = [
 
 function interleave(
   c: Ctx,
-  sectionIndex: number,
+  sectionLabel: string,
   counter: Counter,
   kinds: [ResultKind, number][],
   nParas: number,
@@ -335,7 +350,7 @@ function interleave(
   const total = Math.max(nParas, nResults);
   for (let i = 0; i < total; i++) {
     if (i < nParas) blocks.push(...paragraph(c));
-    if (i < nResults) blocks.push(result(c, c.rng.weighted(kinds), sectionIndex, counter));
+    if (i < nResults) blocks.push(result(c, c.rng.weighted(kinds), sectionLabel, counter));
   }
   return blocks;
 }
@@ -354,18 +369,22 @@ function ensureDisplay(c: Ctx, blocks: Block[]): void {
 
 function buildSection(c: Ctx, index: number, plan: SectionPlan, main: ProvedRef): Section {
   const r = c.rng;
-  c.eq = { section: index, count: 0 };
+  const d = c.detail;
+  const label = plan.type === "appendix" ? "A" : String(index);
+  c.eq = { label, count: 0 };
   const counter: Counter = { n: 0 };
+  const paras = (lo0: number, hi0: number, lo1: number, hi1: number) =>
+    r.range(Math.round(lerp(lo0, lo1, d)), Math.round(lerp(hi0, hi1, d)));
   let blocks: Block[] = [];
 
   switch (plan.type) {
     case "prelim": {
       blocks.push({ k: "para", runs: notation(c) });
-      blocks.push(...interleave(c, index, counter, PRELIM_KINDS, r.range(2, 4), r.range(3, 4)));
+      blocks.push(...interleave(c, label, counter, PRELIM_KINDS, paras(1, 2, 3, 6), paras(2, 2, 4, 6)));
       break;
     }
     case "topic": {
-      blocks = interleave(c, index, counter, TOPIC_KINDS, r.range(3, 5), r.range(2, 4));
+      blocks = interleave(c, label, counter, TOPIC_KINDS, paras(2, 3, 4, 7), paras(1, 2, 3, 6));
       break;
     }
     case "proofsec": {
@@ -379,28 +398,39 @@ function buildSection(c: Ctx, index: number, plan: SectionPlan, main: ProvedRef)
           ...(r.chance(0.6) ? [paragraphLead(c)] : []),
         ]),
       });
-      blocks.push(result(c, "Lemma", index, counter, {
+      blocks.push(result(c, "Lemma", label, counter, {
         name: r.chance(0.5) ? "Key Lemma" : undefined,
         forceProof: true,
       }));
       blocks.push(...paragraph(c));
-      if (r.chance(0.5)) {
-        blocks.push(result(c, "Lemma", index, counter, { forceProof: true }));
+      if (r.chance(lerp(0.3, 0.9, d))) {
+        blocks.push(result(c, "Lemma", label, counter, { forceProof: true }));
       }
       blocks.push({ k: "proofOf", kind: main.kind, number: main.number, body: proof(c, { deep: true }) });
       blocks.push(...paragraph(c, { display: false }));
-      if (r.chance(0.7)) blocks.push(result(c, "Corollary", index, counter));
-      if (r.chance(0.4)) blocks.push(result(c, "Remark", index, counter));
+      if (r.chance(0.7)) blocks.push(result(c, "Corollary", label, counter));
+      if (r.chance(0.4)) blocks.push(result(c, "Remark", label, counter));
       break;
     }
     case "apps": {
-      blocks = interleave(c, index, counter, APPS_KINDS, r.range(2, 4), r.range(2, 3));
+      blocks = interleave(c, label, counter, APPS_KINDS, paras(1, 3, 3, 5), paras(1, 2, 3, 4));
       break;
     }
     case "concluding": {
       blocks.push({ k: "para", runs: conclusion(c) });
-      if (r.chance(0.6)) blocks.push(result(c, "Conjecture", index, counter));
-      if (r.chance(0.3)) blocks.push(result(c, "Remark", index, counter));
+      if (r.chance(0.6)) blocks.push(result(c, "Conjecture", label, counter));
+      if (r.chance(0.3)) blocks.push(result(c, "Remark", label, counter));
+      break;
+    }
+    case "appendix": {
+      blocks.push({
+        k: "para",
+        runs: T`This appendix supplies the proof of a technical lemma used in the proof of Theorem ${main.number}.`,
+      });
+      blocks.push(result(c, "Lemma", label, counter, { forceProof: true }));
+      blocks.push(...paragraph(c));
+      if (r.chance(0.6)) blocks.push(result(c, "Lemma", label, counter, { forceProof: true }));
+      if (r.chance(0.4)) blocks.push(result(c, "Remark", label, counter));
       break;
     }
     default:
@@ -421,11 +451,18 @@ function paragraphLead(c: Ctx): Runs {
 
 export function generatePaper(opts: PaperOptions = {}): Paper {
   const seed = opts.seed ?? randomSeed();
-  const c = makeCtx(seed);
+  const detail = clamp01(opts.detail ?? 0.5);
+  const c = makeCtx(seed, detail);
   const r = c.rng;
 
-  const totalSections = clamp(opts.sections ?? r.range(7, 9), 3, 10);
-  c.refCount = clamp(opts.references ?? r.range(15, 22), 1, 60);
+  const totalSections = clamp(
+    opts.sections ?? r.range(Math.round(lerp(4, 10, detail)), Math.round(lerp(5, 12, detail))),
+    3, 10,
+  );
+  c.refCount = clamp(
+    opts.references ?? r.range(Math.round(lerp(6, 24, detail)), Math.round(lerp(8, 36, detail))),
+    1, 60,
+  );
 
   const plans = planSections(c, totalSections);
   const title = makeTitle(c);
@@ -438,11 +475,11 @@ export function generatePaper(opts: PaperOptions = {}): Paper {
     c.field,
     c.named[1].replace(/^the /, ""),
     `${r.pick(ADJECTIVES)} ${r.pick(OBJECTS)}`,
-  ];
+  ].slice(0, 3 + Math.round(2 * detail));
   const msc = makeMsc(c);
 
   // Introduction: motivation, literature, the main theorem, organization.
-  c.eq = { section: 1, count: 0 };
+  c.eq = { label: "1", count: 0 };
   const counter: Counter = { n: 0 };
   const introBlocks: Block[] = [
     { k: "para", runs: introOpener(c) },
@@ -450,25 +487,33 @@ export function generatePaper(opts: PaperOptions = {}): Paper {
     ...paragraph(c, { display: true }),
     { k: "para", runs: T`Our main result is the following.` },
   ];
+  if (detail > 0.7) introBlocks.splice(2, 0, ...paragraph(c));
   const main: ProvedRef = { kind: "Theorem", number: `1.${++counter.n}` };
   introBlocks.push({
     k: "result", kind: main.kind, number: main.number, name: "Main Theorem",
     statement: mainStatement(c),
   });
   c.proved.push(main);
-  if (r.chance(0.5)) introBlocks.push(result(c, r.chance(0.6) ? "Definition" : "Remark", 1, counter));
+  if (r.chance(0.5)) introBlocks.push(result(c, r.chance(0.6) ? "Definition" : "Remark", "1", counter));
   introBlocks.push({ k: "para", runs: organization(c, plans) });
 
   const sections: Section[] = [{ title: "Introduction", blocks: introBlocks }];
   plans.slice(1).forEach((plan, i) => {
-    sections.push(buildSection(c, i + 2, plan, main));
+    const section = buildSection(c, i + 2, plan, main);
+    if (plan.type === "appendix") section.appendix = true;
+    sections.push(section);
   });
+
+  const hasAppendix = sections.some((s) => s.appendix);
+  const appendixBy = hasAppendix
+    ? `${r.pick([..."ABCDEFGHJKLMNPQRSTVW"])}. ${r.pick(SURNAMES.filter((n) => !authors.some((a) => a.name.endsWith(n))))}`
+    : undefined;
 
   const references = Array.from({ length: c.refCount }, () => makeReference(c, paperYear));
   references.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
   return {
-    seed, title, authors, date, abstract, keywords, msc, sections,
+    seed, title, authors, appendixBy, date, abstract, keywords, msc, sections,
     acknowledgments: acknowledgments(c),
     references,
   };
@@ -479,9 +524,14 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0.5;
+  return Math.max(0, Math.min(1, n));
+}
+
 /** A standalone numbered result for the fragment API. */
 export function fragmentResult(c: Ctx, kind: ResultKind): Block {
-  return result(c, kind, 1, { n: 0 }, { forceProof: kind === "Theorem" });
+  return result(c, kind, "1", { n: 0 }, { forceProof: kind === "Theorem" });
 }
 
 export { paragraph as ctxParagraph };

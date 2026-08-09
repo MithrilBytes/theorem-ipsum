@@ -129,7 +129,10 @@ export function renderLatex(paper: Paper): string {
     : `Primary ${primary}`;
 
   const sections = paper.sections
-    .map((s) => `\\section{${escapeLatex(s.title)}}\n\n${blocks(s.blocks)}`)
+    .map((s) => {
+      const head = s.appendix ? "\\appendix\n\\section" : "\\section";
+      return `${head}{${escapeLatex(s.title)}}\n\n${blocks(s.blocks)}`;
+    })
     .join("\n\n");
 
   const bib = paper.references
@@ -155,7 +158,7 @@ export function renderLatex(paper: Paper): string {
 \\newtheorem{remark}[theorem]{Remark}
 
 \\title{${escapeLatex(paper.title)}}
-${frontAuthors}
+${frontAuthors}${paper.appendixBy ? `\n\\dedicatory{with an appendix by ${escapeLatex(paper.appendixBy)}}` : ""}
 \\subjclass[2020]{${subjclass}}
 \\keywords{${paper.keywords.map(escapeLatex).join("; ")}}
 \\date{${escapeLatex(paper.date)}}
