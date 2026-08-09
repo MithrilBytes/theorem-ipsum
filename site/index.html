@@ -28,10 +28,27 @@
     </p>
     <button id="randomize">randomize</button>
     <button id="download" class="secondary">download .tex</button>
-    <div class="detail-control">
-      <label for="detail">detail <span id="detail-value">0.50</span></label>
-      <input id="detail" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Detail">
-      <div class="detail-ends"><span>note</span><span>treatise</span></div>
+    <div class="dials">
+      <div class="dial">
+        <label for="length">length <span data-value="length">0.50</span></label>
+        <input id="length" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Page length">
+        <div class="dial-ends"><span>note</span><span>treatise</span></div>
+      </div>
+      <div class="dial">
+        <label for="sentence">sentence <span data-value="sentence">0.50</span></label>
+        <input id="sentence" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Sentence length">
+        <div class="dial-ends"><span>terse</span><span>winding</span></div>
+      </div>
+      <div class="dial">
+        <label for="paragraph">paragraph <span data-value="paragraph">0.50</span></label>
+        <input id="paragraph" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Paragraph length">
+        <div class="dial-ends"><span>choppy</span><span>sprawling</span></div>
+      </div>
+      <div class="dial">
+        <label for="gobbledygook">gobbledygook <span data-value="gobbledygook">0.50</span></label>
+        <input id="gobbledygook" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Gobbledygook">
+        <div class="dial-ends"><span>sober</span><span>unhinged</span></div>
+      </div>
     </div>
     <p class="install">
       <code>npm i theorem-ipsum</code><br>

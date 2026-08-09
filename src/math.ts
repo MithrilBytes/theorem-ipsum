@@ -2,7 +2,7 @@
  * Math expression AST. Expressions are generated from a seeded Rng and
  * rendered to LaTeX (KaTeX-compatible, amsmath-compatible) or Unicode text.
  */
-import type { Rng } from "./rng.js";
+import { lerp, type Rng } from "./rng.js";
 
 export interface Sym {
   latex: string;
@@ -156,13 +156,17 @@ export interface MathCtx {
   palette: Sym[];
   /** Letter symbols for bound and index variables. */
   scalars: Sym[];
+  /** Sentence-length dial, 0 to 1: longer relation chains, deeper terms. */
+  verbosity: number;
+  /** Gobbledygook dial, 0 to 1: how often symbols stray from the palette. */
+  scatter: number;
 }
 
 function leaf(c: MathCtx): Expr {
   const r = c.rng;
   if (r.chance(0.07)) return { k: "num", v: r.range(0, 9) };
   if (r.chance(0.06)) return { k: "sym", s: r.pick(CONSTANTS) };
-  if (r.chance(0.85)) return { k: "sym", s: r.pick(c.palette) };
+  if (r.chance(lerp(0.92, 0.55, c.scatter))) return { k: "sym", s: r.pick(c.palette) };
   return { k: "sym", s: r.pick(ALL_SYMS) };
 }
 
@@ -276,7 +280,8 @@ export function term(c: MathCtx, depth: number): Expr {
 
 function relChain(c: MathCtx, depth: number, parts?: number): Expr {
   const r = c.rng;
-  const n = parts ?? (r.chance(0.8) ? 2 : 3);
+  const n = parts ?? (r.chance(lerp(0.9, 0.55, c.verbosity)) ? 2 : 3);
+  depth += r.chance(lerp(0, 0.35, c.verbosity)) ? 1 : 0;
   const pickRel = () => (r.chance(0.35) ? EQ : r.pick(RELS));
   const exprs: Expr[] = [term(c, depth)];
   for (let i = 1; i < n; i++) {

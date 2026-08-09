@@ -173,12 +173,12 @@ describe("fullness", () => {
     }
   });
 
-  test("detail scales the paper", () => {
+  test("the length dial scales the paper", () => {
     let loWords = 0, hiWords = 0, loAuthors = 0, hiAuthors = 0;
     let loResults = 0, hiResults = 0;
     for (const seed of ["t1", "t2", "t3"]) {
-      const lo = generatePaper({ seed, detail: 0 });
-      const hi = generatePaper({ seed, detail: 1 });
+      const lo = generatePaper({ seed, length: 0 });
+      const hi = generatePaper({ seed, length: 1 });
       loWords += render(lo, "text").split(/\s+/).length;
       hiWords += render(hi, "text").split(/\s+/).length;
       loAuthors += lo.authors.length;
@@ -193,19 +193,67 @@ describe("fullness", () => {
     expect(hiResults).toBeGreaterThan(loResults);
   });
 
-  test("detail is clamped and deterministic", () => {
-    expect(theoremIpsum({ seed: "c", detail: 5, format: "text" })).toEqual(
-      theoremIpsum({ seed: "c", detail: 1, format: "text" }),
+  test("the paragraph dial lengthens paragraphs without changing scale", () => {
+    let loMax = 0, hiMax = 0;
+    for (const seed of ["p1", "p2", "p3"]) {
+      const measure = (paragraphDial: number) => {
+        const p = generatePaper({ seed, paragraph: paragraphDial });
+        let longest = 0;
+        for (const sec of p.sections) {
+          for (const b of sec.blocks) {
+            if (b.k === "para") {
+              const words = b.runs.reduce((acc, r) => acc + (r.k === "text" ? r.s.split(/\s+/).length : 1), 0);
+              longest = Math.max(longest, words);
+            }
+          }
+        }
+        return longest;
+      };
+      loMax += measure(0);
+      hiMax += measure(1);
+    }
+    expect(hiMax).toBeGreaterThan(loMax * 1.3);
+  });
+
+  test("the sentence dial adds subordinate clauses", () => {
+    const markers = /, provided |, whenever |, in the sense of |, though the converse |, as the reader may verify|, and similarly for /g;
+    let lo = 0, hi = 0;
+    for (const seed of ["s1", "s2", "s3"]) {
+      lo += (theoremIpsum({ seed, sentence: 0, format: "text" }).match(markers) ?? []).length;
+      hi += (theoremIpsum({ seed, sentence: 1, format: "text" }).match(markers) ?? []).length;
+    }
+    expect(hi).toBeGreaterThan(lo);
+  });
+
+  test("the gobbledygook dial stacks prefixes and sillies the eponyms", () => {
+    const prefixes = /(pseudo-|quasi-|semi-|hyper-|ultra-|meta-|bi-)[a-z]/g;
+    const silly = /Nozzle|Snaggle|Wumpin|Quabosh|Bumbershoot|Hornswoggle|Fiddlecomb|Thistlewood/g;
+    let loP = 0, hiP = 0, loS = 0, hiS = 0;
+    for (const seed of ["g1", "g2", "g3"]) {
+      const lo = theoremIpsum({ seed, gobbledygook: 0, format: "text" });
+      const hi = theoremIpsum({ seed, gobbledygook: 1, format: "text" });
+      loP += (lo.match(prefixes) ?? []).length;
+      hiP += (hi.match(prefixes) ?? []).length;
+      loS += (lo.match(silly) ?? []).length;
+      hiS += (hi.match(silly) ?? []).length;
+    }
+    expect(hiP).toBeGreaterThan(loP);
+    expect(hiS).toBeGreaterThan(loS);
+  });
+
+  test("dials are clamped and deterministic", () => {
+    expect(theoremIpsum({ seed: "c", length: 5, format: "text" })).toEqual(
+      theoremIpsum({ seed: "c", length: 1, format: "text" }),
     );
-    expect(theoremIpsum({ seed: "c", detail: -3, format: "text" })).toEqual(
-      theoremIpsum({ seed: "c", detail: 0, format: "text" }),
+    expect(theoremIpsum({ seed: "c", length: -3, format: "text" })).toEqual(
+      theoremIpsum({ seed: "c", length: 0, format: "text" }),
     );
   });
 
-  test("high detail can produce an appendix with a credited contributor", () => {
+  test("high length can produce an appendix with a credited contributor", () => {
     let found = false;
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const p = generatePaper({ seed, detail: 1 });
+      const p = generatePaper({ seed, length: 1 });
       const appendix = p.sections.find((s) => s.appendix);
       if (!appendix) continue;
       found = true;

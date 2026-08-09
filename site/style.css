@@ -80,21 +80,23 @@ body {
 
 .side button:hover { filter: brightness(1.08); }
 
-/* detail slider */
+/* generation dials */
 
-.detail-control { margin: 1.2rem 0 0; }
+.dials { margin: 1.2rem 0 0; }
 
-.detail-control label {
+.dial { margin-bottom: 0.85rem; }
+
+.dial label {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 0.8rem;
-  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  margin-bottom: 0.3rem;
 }
 
-#detail-value { color: var(--accent); }
+.dial label span { color: var(--accent); }
 
-#detail {
+.dial input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -106,29 +108,29 @@ body {
   margin: 0.2rem 0;
 }
 
-#detail::-webkit-slider-thumb {
+.dial input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-#detail::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+.dial input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg);
 }
 
-.detail-ends {
+.dial-ends {
   display: flex;
   justify-content: space-between;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   color: var(--side-muted);
 }
 
