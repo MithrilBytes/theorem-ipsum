@@ -54,10 +54,24 @@ function typeset(root) {
   });
 }
 
+const seedEl = document.getElementById("seed");
+
 document.getElementById("randomize").addEventListener("click", () => {
   seedText = randomSeed();
+  seedEl.value = seedText;
   generate();
   window.scrollTo({ top: 0 });
+});
+
+let seedTimer;
+seedEl.addEventListener("input", () => {
+  clearTimeout(seedTimer);
+  seedTimer = setTimeout(() => {
+    const raw = seedEl.value.trim();
+    if (!raw || raw === seedText) return;
+    seedText = raw;
+    generate();
+  }, 250);
 });
 
 document.getElementById("download").addEventListener("click", () => {
@@ -84,6 +98,7 @@ for (const name of DIALS) {
 
 const params = new URLSearchParams(location.search);
 seedText = params.get("seed") ?? randomSeed();
+seedEl.value = seedText;
 for (const name of DIALS) {
   const raw = params.get(name);
   if (raw !== null && Number.isFinite(Number(raw))) {
