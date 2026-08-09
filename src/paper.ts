@@ -11,11 +11,11 @@ import { T, joinSentences } from "./doc.js";
 import {
   type Ctx, type Dials, type ProvedRef, abstractRuns, acknowledgments,
   conclusion, display, introOpener, literature, mainStatement, namedResult,
-  notation, paragraph, proof, shortProof, statement, titleCase,
+  notation, npText, paragraph, proof, shortProof, statement, titleCase,
 } from "./grammar.js";
 import {
-  ADJECTIVES, FIELDS, MONTHS, NATIONALITIES, OBJECTS, PLACES, SURNAMES,
-  VERBS, an, cap, plural,
+  ACTION_NOUNS, ADJECTIVES, FIELDS, MONTHS, NATIONALITIES, OBJECTS, PLACES,
+  SURNAMES, VERBS, an, cap, plural,
 } from "./vocab.js";
 
 export interface PaperOptions {
@@ -79,6 +79,11 @@ export function makeTitle(c: Ctx): string {
     [() => `${an(buzz)} approach to ${c.named[0]}`, 1],
     [() => `${cap(c.named[0].replace(/^the /, ""))} and its applications`, 1],
     [() => `On the failure of ${c.named[0]} for ${buzz} ${plural(obj)}`, 1],
+    [() => `Some ${r.pick(ACTION_NOUNS)} results for ${npText(c, { plural: true })}`, 1.5],
+    [() => `On the ${r.pick(ACTION_NOUNS)} of ${npText(c, { plural: true })}`, 1.5],
+    [() => `${npText(c, { plural: true })} and ${r.pick(FIELDS)}`, 1],
+    [() => `${r.pick(ACTION_NOUNS)} in ${r.pick(FIELDS)}`, 0.8],
+    [() => `${npText(c, { plural: true })} over ${npText(c, { plural: true })}`, 0.8],
   ];
   return titleCase(r.weighted(patterns)());
 }
@@ -228,9 +233,14 @@ function planSections(c: Ctx, total: number): SectionPlan[] {
   const topicTitle = (): { title: string; topic: string } => {
     const patterns: [() => { title: string; topic: string }, number][] = [
       [() => { const t = `the ${r.pick(ADJECTIVES)} case`; return { title: t, topic: t }; }, 2],
-      [() => { const t = `${r.pick(ADJECTIVES)} ${plural(r.pick(OBJECTS))}`; return { title: t, topic: t }; }, 2],
+      [() => { const t = npText(c, { plural: true }); return { title: `fundamental properties of ${t}`, topic: t }; }, 1.5],
+      [() => { const t = r.pick(ACTION_NOUNS); return { title: `connections to ${t}`, topic: `questions of ${t}` }; }, 1.5],
+      [() => { const t = r.pick(ACTION_NOUNS); return { title: `an application to ${t}`, topic: `an application to ${t}` }; }, 1.2],
+      [() => { const t = `basic results of ${r.pick(FIELDS)}`; return { title: t, topic: t }; }, 1],
+      [() => { const t = `an example of ${r.pick(SURNAMES)}`; return { title: t, topic: t }; }, 0.8],
+      [() => { const t = `${r.pick(ADJECTIVES)} ${plural(r.pick(OBJECTS))}`; return { title: t, topic: t }; }, 1.5],
       [() => { const t = `${an(r.pick(ADJECTIVES))} counterexample`; return { title: t, topic: t }; }, 1],
-      [() => { const t = c.named[1]; return { title: `${r.pick(VERBS).ger} ${t}`, topic: t }; }, 1.5],
+      [() => { const t = c.named[1]; return { title: `${r.pick(VERBS).ger} ${t}`, topic: t }; }, 1.2],
     ];
     const { title, topic } = r.weighted(patterns)();
     return { title: titleCase(title), topic };
@@ -491,7 +501,7 @@ export function generatePaper(opts: PaperOptions = {}): Paper {
   const date = `${r.pick(MONTHS)} ${paperYear}`;
   const abstract = abstractRuns(c);
   const keywords = [
-    `${r.pick(ADJECTIVES)} ${plural(r.pick(OBJECTS))}`,
+    npText(c, { plural: true }),
     c.field,
     c.named[1].replace(/^the /, ""),
     `${r.pick(ADJECTIVES)} ${r.pick(OBJECTS)}`,
@@ -505,7 +515,7 @@ export function generatePaper(opts: PaperOptions = {}): Paper {
     { k: "para", runs: introOpener(c) },
     { k: "para", runs: literature(c) },
     ...paragraph(c, { display: true }),
-    { k: "para", runs: T`Our main result is the following.` },
+    { k: "para", runs: r.chance(0.5) ? T`We now state our main result.` : T`Our main result is the following.` },
   ];
   if (len > 0.7) introBlocks.splice(2, 0, ...paragraph(c));
   const main: ProvedRef = { kind: "Theorem", number: `1.${++counter.n}` };
