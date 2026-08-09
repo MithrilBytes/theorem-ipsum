@@ -80,6 +80,58 @@ body {
 
 .side button:hover { filter: brightness(1.08); }
 
+/* detail slider */
+
+.detail-control { margin: 1.2rem 0 0; }
+
+.detail-control label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
+}
+
+#detail-value { color: var(--accent); }
+
+#detail {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+  margin: 0.2rem 0;
+}
+
+#detail::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+#detail::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+.detail-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: var(--side-muted);
+}
+
 .side .install {
   margin-top: 1.4rem;
   font-size: 0.75rem;

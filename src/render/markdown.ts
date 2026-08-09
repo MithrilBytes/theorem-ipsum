@@ -78,7 +78,7 @@ export function renderMarkdown(paper: Paper): string {
   const authors = paper.authors.map((a) => `**${a.name}**`).join(" · ");
 
   const sections = paper.sections
-    .map((s, i) => `## ${i + 1}. ${s.title}\n\n${blocks(s.blocks)}`)
+    .map((s, i) => `## ${s.appendix ? `Appendix A. ${s.title}` : `${i + 1}. ${s.title}`}\n\n${blocks(s.blocks)}`)
     .join("\n\n");
 
   const addresses = paper.authors
@@ -87,7 +87,7 @@ export function renderMarkdown(paper: Paper): string {
 
   return `# ${paper.title}
 
-${authors}
+${authors}${paper.appendixBy ? `\n\n*with an appendix by ${paper.appendixBy}*` : ""}
 
 *${paper.date}*
 

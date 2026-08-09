@@ -61,6 +61,11 @@ export class Rng {
   }
 }
 
+/** Linear interpolation from a to b at t in [0, 1]. */
+export function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
 /** xmur3 string hash, for string seeds. */
 function hashString(s: string): number {
   let h = 1779033703 ^ s.length;

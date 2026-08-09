@@ -2,17 +2,27 @@
 import { generatePaper, randomSeed, renderHtml, renderLatex } from "./theorem-ipsum.esm.js";
 
 const paperEl = document.getElementById("paper");
+const detailEl = document.getElementById("detail");
+const detailValueEl = document.getElementById("detail-value");
 let paper = null;
+let seedText = "";
 
 function coerceSeed(raw) {
   return /^-?\d+$/.test(raw) ? Number(raw) : raw;
 }
 
-function generate(seedText) {
-  paper = generatePaper({ seed: coerceSeed(seedText) });
+function detail() {
+  return Number(detailEl.value);
+}
+
+function generate() {
+  paper = generatePaper({ seed: coerceSeed(seedText), detail: detail() });
   paperEl.innerHTML = renderHtml(paper);
   typeset(paperEl);
-  history.replaceState(null, "", `${location.pathname}?seed=${encodeURIComponent(seedText)}`);
+  const params = new URLSearchParams();
+  params.set("seed", seedText);
+  if (detail() !== 0.5) params.set("detail", detailEl.value);
+  history.replaceState(null, "", `${location.pathname}?${params}`);
 }
 
 function typeset(root) {
@@ -41,7 +51,8 @@ function typeset(root) {
 }
 
 document.getElementById("randomize").addEventListener("click", () => {
-  generate(randomSeed());
+  seedText = randomSeed();
+  generate();
   window.scrollTo({ top: 0 });
 });
 
@@ -56,5 +67,18 @@ document.getElementById("download").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-const initial = new URLSearchParams(location.search).get("seed") ?? randomSeed();
-generate(initial);
+let detailTimer;
+detailEl.addEventListener("input", () => {
+  detailValueEl.textContent = detail().toFixed(2);
+  clearTimeout(detailTimer);
+  detailTimer = setTimeout(generate, 150);
+});
+
+const params = new URLSearchParams(location.search);
+seedText = params.get("seed") ?? randomSeed();
+const initialDetail = Number(params.get("detail"));
+if (Number.isFinite(initialDetail) && params.get("detail") !== null) {
+  detailEl.value = String(Math.max(0, Math.min(1, initialDetail)));
+}
+detailValueEl.textContent = detail().toFixed(2);
+generate();

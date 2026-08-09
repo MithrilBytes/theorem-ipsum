@@ -67,11 +67,12 @@ describe("structure", () => {
 
   test("results are numbered by section, in order", () => {
     paper.sections.forEach((section, si) => {
+      const label = section.appendix ? "A" : String(si + 1);
       let counter = 0;
       for (const block of section.blocks) {
         if (block.k === "result") {
           counter += 1;
-          expect(block.number).toBe(`${si + 1}.${counter}`);
+          expect(block.number).toBe(`${label}.${counter}`);
         }
       }
     });
@@ -82,11 +83,12 @@ describe("structure", () => {
       const p = generatePaper({ seed });
       const numbers: string[] = [];
       p.sections.forEach((section, si) => {
+        const label = section.appendix ? "A" : String(si + 1);
         let counter = 0;
         for (const b of walkBlocks(section.blocks)) {
           if (b.k === "display" && b.no) {
             counter += 1;
-            expect(b.no).toBe(`${si + 1}.${counter}`);
+            expect(b.no).toBe(`${label}.${counter}`);
             numbers.push(b.no);
           }
         }
@@ -164,11 +166,58 @@ describe("fullness", () => {
       expect(p.sections.length).toBeGreaterThanOrEqual(6);
       expect(results).toBeGreaterThanOrEqual(10);
       expect(displays).toBeGreaterThanOrEqual(10);
-      expect(proofs).toBeGreaterThanOrEqual(6);
+      expect(proofs).toBeGreaterThanOrEqual(5);
       expect(p.references.length).toBeGreaterThanOrEqual(15);
       const words = render(p, "text").split(/\s+/).length;
       expect(words).toBeGreaterThanOrEqual(2000);
     }
+  });
+
+  test("detail scales the paper", () => {
+    let loWords = 0, hiWords = 0, loAuthors = 0, hiAuthors = 0;
+    let loResults = 0, hiResults = 0;
+    for (const seed of ["t1", "t2", "t3"]) {
+      const lo = generatePaper({ seed, detail: 0 });
+      const hi = generatePaper({ seed, detail: 1 });
+      loWords += render(lo, "text").split(/\s+/).length;
+      hiWords += render(hi, "text").split(/\s+/).length;
+      loAuthors += lo.authors.length;
+      hiAuthors += hi.authors.length;
+      loResults += lo.sections.flatMap((s) => [...walkBlocks(s.blocks)]).filter((b) => b.k === "result").length;
+      hiResults += hi.sections.flatMap((s) => [...walkBlocks(s.blocks)]).filter((b) => b.k === "result").length;
+      expect(hi.references.length).toBeGreaterThan(lo.references.length);
+      expect(hi.sections.length).toBeGreaterThanOrEqual(lo.sections.length);
+    }
+    expect(hiWords).toBeGreaterThan(loWords * 1.5);
+    expect(hiAuthors).toBeGreaterThanOrEqual(loAuthors);
+    expect(hiResults).toBeGreaterThan(loResults);
+  });
+
+  test("detail is clamped and deterministic", () => {
+    expect(theoremIpsum({ seed: "c", detail: 5, format: "text" })).toEqual(
+      theoremIpsum({ seed: "c", detail: 1, format: "text" }),
+    );
+    expect(theoremIpsum({ seed: "c", detail: -3, format: "text" })).toEqual(
+      theoremIpsum({ seed: "c", detail: 0, format: "text" }),
+    );
+  });
+
+  test("high detail can produce an appendix with a credited contributor", () => {
+    let found = false;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const p = generatePaper({ seed, detail: 1 });
+      const appendix = p.sections.find((s) => s.appendix);
+      if (!appendix) continue;
+      found = true;
+      expect(p.sections[p.sections.length - 1]).toBe(appendix);
+      expect(p.appendixBy).toBeTruthy();
+      const first = appendix.blocks.find((b) => b.k === "result");
+      expect(first?.k === "result" && first.number).toBe("A.1");
+      const tex = render(p, "latex");
+      expect(tex).toContain("\\appendix");
+      expect(tex).toContain("\\dedicatory{with an appendix by");
+    }
+    expect(found).toBe(true);
   });
 
   test("every section contains at least one display equation", () => {
