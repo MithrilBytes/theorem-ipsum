@@ -101,35 +101,27 @@ body {
 
 .side button:hover { filter: brightness(1.08); }
 
-/* generation dials, one line */
+/* generation dials, one per line */
 
-.dials {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin: 1.2rem 0 0;
-}
+.dials { margin: 1.2rem 0 0; }
 
-.dial {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
+.dial { margin-bottom: 0.85rem; }
 
 .dial label {
-  font-size: 0.56rem;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--side-ink);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.78rem;
+  margin-bottom: 0.3rem;
 }
 
-.dial-value {
+.dial-value { color: var(--accent); }
+
+.dial-ends {
+  display: flex;
+  justify-content: space-between;
   font-size: 0.62rem;
-  text-align: center;
-  color: var(--accent);
+  color: var(--side-muted);
 }
 
 .dial input[type="range"] {
