@@ -1,0 +1,202 @@
+/* Theorem Ipsum demo site */
+
+:root {
+  --bg: #ebe8e1;
+  --side-ink: #1c1c22;
+  --side-muted: #6b6b76;
+  --accent: #4a5899;
+  --accent-ink: #fff;
+  --border: #d5d1c7;
+  --code-bg: #dfdcd3;
+  --sheet: #fffdf8;
+  --sheet-ink: #1a1a1f;
+  --sheet-muted: #666;
+  --sheet-accent: #3d4a85;
+  --shadow: 0 1px 3px rgba(30, 25, 15, 0.14), 0 12px 40px rgba(30, 25, 15, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141419;
+    --side-ink: #e8e6e1;
+    --side-muted: #9a99a4;
+    --accent: #8d9bd8;
+    --accent-ink: #14141a;
+    --border: #32323d;
+    --code-bg: #1e1e26;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--side-ink);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.55;
+}
+
+/* ---- layout: fixed sidebar, paper sheet ------------------------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: 2rem;
+  max-width: 78rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.side {
+  position: sticky;
+  top: 2rem;
+  align-self: start;
+  font-size: 0.85rem;
+}
+
+.side h1 { font-size: 1.15rem; margin: 0 0 1rem; }
+.side p { margin: 0 0 1rem; color: var(--side-muted); }
+.side a { color: var(--accent); }
+
+.side button {
+  display: block;
+  width: 100%;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.35rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.side button.secondary {
+  background: none;
+  color: var(--accent);
+}
+
+.side button:hover { filter: brightness(1.08); }
+
+.side .install {
+  margin-top: 1.4rem;
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.side code {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem;
+}
+
+/* ---- the sheet: always paper-white, amsart layout ---------------- */
+
+.sheet-wrap { min-width: 0; }
+
+.sheet {
+  background: var(--sheet);
+  color: var(--sheet-ink);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+  padding: clamp(1.6rem, 5vw, 4.5rem) clamp(1.4rem, 6vw, 5rem);
+  font-family: "KaTeX_Main", Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.noscript { padding: 2rem; text-align: center; color: var(--side-muted); }
+
+.ti-paper header { text-align: center; margin-bottom: 1.6rem; }
+
+.ti-title {
+  font-size: 1.12rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  margin: 0 0 1.4rem;
+}
+
+.ti-authors {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.5rem;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+}
+
+.ti-author + .ti-author::before { content: "· "; color: var(--sheet-muted); }
+.ti-date { margin-top: 0.8rem; font-size: 0.85rem; font-style: italic; color: var(--sheet-muted); }
+
+.ti-abstract {
+  margin: 0 auto 1.6rem;
+  max-width: 88%;
+  font-size: 0.9rem;
+}
+
+.ti-abstract-head { font-variant: small-caps; letter-spacing: 0.08em; }
+
+.ti-meta { font-size: 0.8rem; color: var(--sheet-muted); }
+
+.ti-paper h2 {
+  font-size: 0.98rem;
+  font-weight: 400;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  text-align: center;
+  margin: 1.9rem 0 0.8rem;
+}
+
+.ti-paper p { margin: 0.65rem 0; text-align: justify; hyphens: auto; }
+.ti-paper p + p { text-indent: 1.4em; }
+.ti-result p, .ti-proof p, .ti-abstract p { text-indent: 0; }
+
+.ti-result { margin: 1rem 0; }
+.ti-result-head { font-weight: 700; }
+.ti-remark .ti-result-head, .ti-example .ti-result-head { font-weight: 400; font-style: italic; }
+
+.ti-proof { margin: 0.65rem 0 1rem; }
+.ti-qed { text-align: right; margin-top: -1.3rem; }
+
+.ti-cite { color: var(--sheet-accent); }
+
+.math.inline { white-space: nowrap; }
+
+.math.display {
+  margin: 0.9rem 0;
+  text-align: center;
+  overflow-x: auto;
+  padding: 0.2rem 0;
+}
+
+.ti-references ol { padding-left: 1.6rem; font-size: 0.88rem; }
+.ti-references li { margin: 0.4rem 0; }
+
+.ti-acknowledgments p { font-size: 0.92rem; }
+
+.ti-addresses { margin-top: 2rem; font-size: 0.82rem; }
+.ti-addresses .ti-address { font-variant: small-caps; letter-spacing: 0.04em; }
+.ti-addresses .ti-email {
+  font-variant: normal;
+  letter-spacing: 0;
+  font-style: italic;
+}
+
+.katex { font-size: 1.05em; }
+
+/* ---- small screens ---------------------------------------------- */
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+    padding: 1rem;
+  }
+  .side { position: static; }
+  .side button { display: inline-block; width: auto; margin-right: 0.5rem; }
+}

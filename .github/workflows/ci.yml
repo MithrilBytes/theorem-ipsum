@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run build:site
+
+  latex-compiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Generate papers
+        run: |
+          npx esbuild src/cli.ts --bundle --format=esm --platform=node --outfile=/tmp/cli.mjs
+          for seed in 1 2 3 tame-quandle; do
+            node /tmp/cli.mjs --seed "$seed" --format latex --out "/tmp/paper-$seed.tex"
+          done
+      - name: Compile with Tectonic
+        uses: wtfjoke/setup-tectonic@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          for f in /tmp/paper-*.tex; do
+            echo "== $f"
+            tectonic "$f" --outdir /tmp
+          done
