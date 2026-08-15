@@ -39,8 +39,18 @@ jobs:
         uses: wtfjoke/setup-tectonic@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache Tectonic packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Tectonic
+          key: tectonic-bundle-${{ runner.os }}
       - run: |
           for f in /tmp/paper-*.tex; do
             echo "== $f"
-            tectonic "$f" --outdir /tmp
+            for i in 1 2 3; do
+              tectonic "$f" --outdir /tmp && break
+              echo "tectonic attempt $i failed; retrying in 30s"
+              sleep 30
+            done
+            test -f "${f%.tex}.pdf" || { echo "missing PDF for $f"; exit 1; }
           done
