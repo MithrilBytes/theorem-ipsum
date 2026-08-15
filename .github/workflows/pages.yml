@@ -31,6 +31,8 @@ jobs:
           sed -i "s#href=\"style.css\"#href=\"style.css?v=$v\"#" site/index.html
           sed -i "s#src=\"main.js\"#src=\"main.js?v=$v\"#" site/index.html
           sed -i "s#./theorem-ipsum.esm.js#./theorem-ipsum.esm.js?v=$v#" site/main.js
+          sed -i "s#vendor/katex/katex.min.css#vendor/katex/katex.min.css?v=$v#" site/index.html
+          sed -i "s#vendor/katex/katex.min.js#vendor/katex/katex.min.js?v=$v#" site/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
