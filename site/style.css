@@ -54,6 +54,11 @@ body {
   top: 2rem;
   align-self: start;
   font-size: 0.85rem;
+  /* Never taller than the viewport; scroll internally instead of clipping. */
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 0.25rem;
 }
 
 .side h1 { font-size: 1.15rem; margin: 0 0 1rem; }
