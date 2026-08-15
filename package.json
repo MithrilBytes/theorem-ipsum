@@ -37,7 +37,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "build:site": "esbuild src/index.ts --bundle --format=esm --minify --outfile=site/theorem-ipsum.esm.js",
+    "build:site": "esbuild src/index.ts --bundle --format=esm --minify --outfile=site/theorem-ipsum.esm.js && rm -rf site/vendor && mkdir -p site/vendor/katex && cp node_modules/katex/dist/katex.min.css node_modules/katex/dist/katex.min.js site/vendor/katex/ && cp -R node_modules/katex/dist/fonts site/vendor/katex/",
     "dev": "esbuild src/index.ts --bundle --format=esm --outfile=site/theorem-ipsum.esm.js --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
