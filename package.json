@@ -45,9 +45,9 @@
   "devDependencies": {
     "@types/katex": "^0.16.7",
     "@types/node": "^22.10.0",
-    "esbuild": "^0.25.0",
-    "katex": "^0.16.21",
+    "esbuild": "^0.28.2",
+    "katex": "^0.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^5.0.5"
   }
 }
