@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -26,7 +26,7 @@ jobs:
       - run: npm run build:site
 
   latex-compiles:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,11 +42,13 @@ jobs:
           for seed in 1 2 3 tame-quandle; do
             node /tmp/cli.mjs --seed "$seed" --format latex --out "/tmp/paper-$seed.tex"
           done
-      - name: Compile with Tectonic
-        uses: wtfjoke/setup-tectonic@5e1ba6e10229bd876c6594189bdab1a62b9d0b1c # v4.0.6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          tectonic-version: "0.17.0"
+      - name: Install Tectonic
+        run: |
+          url="https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 -o /tmp/tectonic.tgz "$url"
+          echo "8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7  /tmp/tectonic.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/tectonic.tgz -C /usr/local/bin tectonic
+          tectonic --version
       - name: Cache Tectonic packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
